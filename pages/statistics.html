@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<style type="text/css">
+    .row {
+        margin-left: 1em;
+        min-height: 2em;
+        Display: block;
+    }
+
+    .left {
+        width: 40%;
+        float:left;
+    }
+
+    .right {
+        width: 40%;
+        float: right;
+    }
+
+    .statis_box {
+        float: left;
+        width: 16em
+    }
+</style>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realized Profit</title>
+</head>
+
+<body>
+    <h1>Realized Profit Checker</h1>
+
+    <div class="row">
+        <div class="left">
+            <label for="interval">Interval:</label>
+            <input type="number" id="interval" name="interval" min="1" max="120" value="12" required>
+            <span>months&nbsp</span>
+            <button type="button" onclick="getGains()">Query</button>
+        </div>
+        <div class="right">
+            <button type="button" onclick="mainPage()">Main Page</button>
+            <button type="button" onclick="initGains()" disabled>ReInitialize</button>
+        </div>
+    </div>
+    <div class="row">
+        <fieldset>
+            <legend>Summary</legend>
+            <div class="statis_box">
+                <span>Transaction proceeds:</span>
+                <span id="tranproc"></span>
+            </div>
+            <div class="statis_box">
+                <span>Interest:</span>
+                <span id="interest"></span>
+            </div>
+            <div class="statis_box">
+                <span>Overall:</span>
+                <span id="overall"></span>
+            </div>
+        </fieldset>
+    </div>
+
+    <!-- Canvas element to draw the chart -->
+    <canvas id="myChart" width="400" height="200"></canvas>
+
+    <!-- Add Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+
+    <script>
+        function logError(str) {
+            console.error(str);
+        }
+        function logInfo(str) {
+            console.log(str);
+        }
+
+        function numberWithCommas(x) {
+            return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+
+        // Initialize data for the chart
+        var initialData = {
+            labels: [],
+            datasets: [{
+                label: 'Profit',
+                data: [],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderWidth: 1
+            }]
+        };
+
+        // Chart configuration
+        const config = {
+            type: 'bar', // Specify the chart type as 'bar'
+            data: initialData,
+            options: {
+                indexAxis: 'y', // Make it a horizontal bar chart
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        title: {
+                            display: false,
+                            text: 'Gains'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: false,
+                            text: 'Tickets'
+                        }
+                    }
+                },
+                plugins: {
+                    datalabels: {
+                        anchor: 'center',
+                        align: 'center',
+                        formatter: Math.round, // Round off the displayed values
+                        color: 'black',        // Label color
+                        font: {
+                            weight: 'bold',
+                            size: 12
+                        }
+                    }
+                }
+            },
+            plugins: [ChartDataLabels] // Register the datalabels plugin
+        };
+
+        // Create the chart
+        const myChart = new Chart(
+            document.getElementById('myChart'),
+            config
+        );
+
+        // Function to update the chart data dynamically
+        function updateChart(labels, data) {
+            myChart.data.labels = labels;
+            myChart.data.datasets[0].data = data;
+            myChart.update();
+        }
+
+        async function getGains() {
+            const interval = parseInt(document.getElementById('interval').value, 10);
+            if (interval == 0) {
+                logError("Interval cannot be 0")
+            }
+
+            const payload = {
+                op: "gain",
+                interval: interval,
+            }
+
+            try {
+                const response = await fetch('http://localhost:8080/statistics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    logInfo(result)
+                    updateChart(result.labels, result.data)
+
+                    const proceeds = result.data.reduce((partialSum, a) => partialSum + a, 0);
+                    document.getElementById("tranproc").innerText = numberWithCommas(proceeds);
+                } else {
+                    const errorData = await response.json();
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        }
+
+        async function initGains() {
+            const payload = {
+                op: "init",
+            }
+
+            try {
+                const response = await fetch('http://localhost:8080/statistics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    logInfo("Init gain complete.")
+                } else {
+                    const errorData = await response.json();
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function mainPage() {
+            location.href = "http://localhost:8080"
+        }
+
+        // Example of dynamically updating chart data after 3 seconds
+        // setTimeout(() => {
+        //     updateChart([70, 65, 75, 90, 60, 58, 45]);
+        // }, 3000);
+    </script>
+</body>
+
+</html>
