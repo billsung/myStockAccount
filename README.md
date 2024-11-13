@@ -1,6 +1,7 @@
-# My Stock Tracking Accounting
+# My Stock Tracking Page
 
 Just made this for fun.
+My first ChartJS and golang http server
 
 ## Feature
 

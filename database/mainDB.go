@@ -52,6 +52,7 @@ func InitMyDB() {
 	initRefTbl()
 	initHoldingTbl()
 	initRealizedTbl()
+	initStockTbl()
 
 	fmt.Println("Database and table initialized.")
 }
@@ -95,7 +96,7 @@ func initTransTbl() {
 	    );`
 
 	if _, err := db.Exec(createTableSQL); err != nil {
-		log.Fatalf("Main: Failed to create table: %v", err)
+		log.Fatalf("Main: Failed to create transaction table: %v", err)
 	}
 }
 
@@ -111,7 +112,7 @@ func initHoldingTbl() {
 	    );`
 
 	if _, err := db.Exec(cmd); err != nil {
-		log.Fatalf("Main: Failed to create table: %v", err)
+		log.Fatalf("Main: Failed to create hoildings table: %v", err)
 	}
 }
 
@@ -127,7 +128,7 @@ func initRealizedTbl() {
 	    );`
 
 	if _, err := db.Exec(cmd); err != nil {
-		log.Fatalf("Main: Failed to create table: %v", err)
+		log.Fatalf("Main: Failed to create realized table: %v", err)
 	}
 }
 

@@ -14,7 +14,7 @@ func initRefTbl() (err error) {
 		name TEXT NOT NULL
 	    );`
 	if _, err = db.Exec(createRefSQL); err != nil {
-		log.Fatalf("Ref: Failed to create table: %v", err)
+		log.Fatalf("Ref: Failed to create ref-table: %v", err)
 	}
 	return err
 }
@@ -34,7 +34,7 @@ func RefLookupNameByCode(code string) (name string, err error) {
 func refSetupCodeName(code string, name string) (err error) {
 	_, err = RefLookupCodeByName(name)
 	if err != sql.ErrNoRows {
-		return errors.New("Duplicate Code")
+		return errors.New("duplicate code")
 	}
 
 	query := `INSERT INTO reference (code, name) VALUES (?, ?)`

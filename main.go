@@ -48,6 +48,7 @@ func main() {
 	http.HandleFunc("/parser", parseHandler)
 	http.HandleFunc("/addref", addRefHandler)
 	http.HandleFunc("/statistics", statisticHandler)
+	http.HandleFunc("/scanner", scannerHandler)
 
 	fmt.Println("Server started at http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -102,6 +103,17 @@ func statisticHandler(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./pages/statistics.html")
 	case "POST":
 		doStatistic(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func scannerHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		http.ServeFile(w, r, "./pages/scanner.html")
+	case "POST":
+		doScan(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
