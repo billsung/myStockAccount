@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,8 +30,7 @@ type DaliyQuote struct {
 func initStockTbl() {
 	cmd := `CREATE TABLE IF NOT EXISTS ` + CHECKED_DATE_TABLE + ` (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		startdate TEXT NOT NULL,
-		enddate TEXT NOT NULL
+		startdate TEXT NOT NULL
 	    )`
 
 	if _, err := scanDB.Exec(cmd); err != nil {
@@ -83,12 +83,12 @@ func GetTableList() []string {
 	return tblList
 }
 
-func GetDQCheckedDate() (time.Time, time.Time) {
-	var st, ed string
-	var s, e time.Time
-	cmd := fmt.Sprintf("SELECT startdate, enddate FROM " + CHECKED_DATE_TABLE)
+func GetDQCheckedDate() time.Time {
+	var st string
+	var s time.Time
+	cmd := fmt.Sprintf("SELECT startdate FROM " + CHECKED_DATE_TABLE)
 	row := scanDB.QueryRow(cmd)
-	err := row.Scan(&st, &ed)
+	err := row.Scan(&st)
 	if err != nil {
 		fmt.Println("GetChecked table failed.")
 		goto errOut
@@ -99,19 +99,14 @@ func GetDQCheckedDate() (time.Time, time.Time) {
 		fmt.Println("GetChecked parse start failed.")
 		goto errOut
 	}
-	e, err = time.Parse("20060102", ed)
-	if err != nil {
-		fmt.Println("GetChecked parse end failed.")
-		goto errOut
-	}
-	return s, e
+	return s
 
 errOut:
-	return time.Now().AddDate(0, 0, 1), time.Time{}
+	return time.Now().AddDate(0, 0, -70)
 }
 
-func SetDQCheckedDate(s time.Time, e time.Time) error {
-	cmd := fmt.Sprintf("UPDATE %s SET startdate = '%s', enddate = '%s'", CHECKED_DATE_TABLE, s.Format("20060102"), e.Format("20060102"))
+func SetDQCheckedDate(s time.Time) error {
+	cmd := fmt.Sprintf("UPDATE %s SET startdate = '%s'", CHECKED_DATE_TABLE, s.Format("20060102"))
 	_, err := scanDB.Exec(cmd)
 	return err
 }
@@ -132,8 +127,8 @@ func checkDailyQuoteExist(code string, y int, m int, d int) (bool, error) {
 	}
 }
 
-func GetDailyQuote(code string, days int) (dq []DaliyQuote, err error) {
-	cmd := "SELECT * FROM " + code +
+func GetDailyQuote(tblName string, days int) (dq []DaliyQuote, err error) {
+	cmd := "SELECT * FROM " + tblName +
 		" ORDER BY year DESC, month DESC, day DESC" +
 		" LIMIT " + strconv.Itoa(days)
 	rows, err := scanDB.Query(cmd)
@@ -152,21 +147,22 @@ func GetDailyQuote(code string, days int) (dq []DaliyQuote, err error) {
 		}
 		dq = append(dq, r)
 	}
+	slices.Reverse(dq)
 	return dq, err
 }
 
 func FindPrevDailyQuote(code string, y int, m int, d int) (dq DaliyQuote, err error) {
-	cmd := fmt.Sprintf("SELECT * FROM "+code+
+	cmd := fmt.Sprintf("SELECT * FROM %s%s"+
 		" WHERE year < %d OR"+
-		"	year = %d AND month = %d OR"+
-		"	year = %d AND month = %d AND day = %d"+
+		"       year = %d AND month < %d OR"+
+		"       year = %d AND month = %d AND day < %d"+
 		" ORDER BY year DESC, month DESC, day DESC"+
-		" LIMIT 1", y, y, m, y, m, d)
+		" LIMIT 1", STKPREFIX, code, y, y, m, y, m, d)
 	row := scanDB.QueryRow(cmd)
 	var Id int
 	err = row.Scan(&Id, &dq.Year, &dq.Month, &dq.Day, &dq.Volume, &dq.Trans, &dq.Value, &dq.Open, &dq.High, &dq.Low, &dq.Close, &dq.PE)
 	if err != nil {
-		fmt.Println("Failed to query DQ", cmd)
+		fmt.Println("Failed to query prev DQ", cmd)
 		return dq, nil
 	}
 	return dq, err

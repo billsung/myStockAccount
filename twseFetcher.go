@@ -37,46 +37,46 @@ type Tables struct {
 	Notes  []string          `json:"notes"`
 }
 
-func needFetch(now time.Time, end time.Time) bool {
-	ny, nm, nd := now.Date()
-	ey, em, ed := end.Date()
+func dayBeforeInclude(D1 time.Time, D2 time.Time) bool {
+	y1, m1, d1 := D1.Date()
+	y2, m2, d2 := D2.Date()
 
-	if ny > ey || ny == ey && nm > em || ny == ey && nm == em && nd > ed {
+	if y1 < y2 || y1 == y2 && m1 < m2 || y1 == y2 && m1 == m2 && d1 <= d2 {
 		return true
 	}
 	return false
 }
 
-func updateFetch(interval int) error {
+func updateFetch() error {
 	var i int = 0
-	now := time.Now()
-	if now.Hour() < 15 {
-		now = now.AddDate(0, 0, -1)
+	end := time.Now()
+	if end.Hour() < 15 {
+		end = end.AddDate(0, 0, -1)
 	}
-	updateNow := now
 
-	start, end := mydb.GetDQCheckedDate()
+	start := mydb.GetDQCheckedDate()
+	now := start.AddDate(0, 0, 1)
 	fmt.Printf("Check date is %s->%s (%s)\n", start.Format("20060102"), end.Format("20060102"), now.Format("20060102"))
 
-	for needFetch(now, end) && i < interval {
+	for dayBeforeInclude(now, end) {
 		if isWeekend(now) {
-			now = now.AddDate(0, 0, -1)
+			now = now.AddDate(0, 0, 1)
 			continue
 		}
 		y, m, d := now.Date()
 		err := fetchTWSE(y, int(m), d)
 		if err == ErrNoEntry {
-			now = now.AddDate(0, 0, -1)
+			now = now.AddDate(0, 0, 1)
 			continue
 		}
 		if err != nil {
 			return err
 		}
 		i = i + 1
-		now = now.AddDate(0, 0, -1)
+		now = now.AddDate(0, 0, 1)
 	}
 
-	mydb.SetDQCheckedDate(now, updateNow)
+	mydb.SetDQCheckedDate(end)
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	mydb "myDatabase"
@@ -13,6 +14,8 @@ import (
 
 var ErrTooFewDays error = errors.New("too few days")
 var ErrNotInsterested error = errors.New("not interested")
+
+const BASE_QDS_NR int = 19
 
 const MAX_TRANSMIT_SIZE int = 32
 
@@ -87,7 +90,7 @@ func doScan(w http.ResponseWriter, r *http.Request) {
 	next := req.Next
 	fmt.Printf("Start scan.. op=%s interval=%d next=%d\n", op, interval, next)
 
-	err := updateFetch(interval)
+	err := updateFetch()
 	if err != nil {
 		writeJSONErrResonse(w, err.Error(), http.StatusInternalServerError)
 		fmt.Println(err.Error())
@@ -119,7 +122,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		tblName := tables[i]
 		fmt.Printf("Getting DQ for %s...\r", tblName)
 
-		dqs, err := mydb.GetDailyQuote(tblName, interval)
+		dqs, err := mydb.GetDailyQuote(tblName, interval+BASE_QDS_NR)
 		if err != nil {
 			writeJSONErrResonse(w, err.Error(), http.StatusInternalServerError)
 			fmt.Println("Failed to get DQ:", err.Error())
@@ -128,7 +131,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 
 		switch op {
 		case "gap":
-			plot, err = findGap(tblName, dqs)
+			plot, err = findGap(tblName, interval, dqs)
 		default:
 			writeJSONErrResonse(w, "No such op code", http.StatusBadRequest)
 			fmt.Println("No such op code", op)
@@ -149,11 +152,11 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		foundNr += 1
 
 		// TEMP
-		if foundNr > 0 {
-			reply.NextTblIdx = -1
-			writeJSONOKResonse(w, reply)
-			return
-		}
+		// if foundNr > 0 {
+		// 	reply.NextTblIdx = -1
+		// 	writeJSONOKResonse(w, reply)
+		// 	return
+		// }
 
 		if foundNr > MAX_TRANSMIT_SIZE {
 			reply.NextTblIdx = i + 1
@@ -166,27 +169,27 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 	writeJSONOKResonse(w, reply)
 }
 
-func genMA(dqs []mydb.DaliyQuote, interval int) []float64 {
-	day := len(dqs) - 1
+// Date in ascendent
+func genMA(dqs []mydb.DaliyQuote, maNr int) []float64 {
 	ma := []float64{}
 	sum := 0.0
+	i := BASE_QDS_NR + 1 - maNr
 
-	// fmt.Println("CheckingMA", interval)
+	// fmt.Println("CheckingMA", maNr)
 
-	prev := day - interval + 1
-	for day > prev {
-		sum += dqs[day].Close
-		// fmt.Printf("day=%d sum=%f\n", day, sum)
-		day -= 1
+	for i < BASE_QDS_NR {
+		sum += dqs[i].Close
+		// fmt.Printf("[%d] sum=%f\n", i, sum)
+		i += 1
 	}
 
-	for day >= 0 {
-		sum += dqs[day].Close
-		ma = append(ma, sum/float64(interval))
-		// fmt.Printf("2day=%d sum=%f(%f) ma=%f\n", day, sum, dqs[day].Close, ma)
-		sum -= dqs[day+interval-1].Close
-		// fmt.Printf("sum=%f(%f)\n", sum, dqs[day+interval-1].Close)
-		day -= 1
+	for i < len(dqs) {
+		sum += dqs[i].Close
+		ma = append(ma, sum/float64(maNr))
+		// fmt.Printf("[%d] sum=%f(%f) ma=%f\n", i, sum, dqs[i].Close, ma)
+		sum -= dqs[i-maNr+1].Close
+		// fmt.Printf("sum=%f(%f)\n", sum, dqs[i-maNr+1].Close)
+		i += 1
 	}
 	return ma
 }
@@ -207,20 +210,65 @@ func genPlot(code string, ftype int, candle []DQCandle, ma5 []float64, ma10 []fl
 	return plot
 }
 
-func findGap(code string, dqs []mydb.DaliyQuote) (DQPlot, error) {
-	day := len(dqs) - 1
-	if day < 19 {
-		fmt.Println("ERR:", code, "days is", day)
+func findGapCallClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []float64, ma10 []float64, ma20 []float64) int {
+	for i := foundDay + 1; i < interval+BASE_QDS_NR; i = i + 1 {
+		maDay := i - BASE_QDS_NR
+		avg5 := ma5[maDay]
+		avg10 := ma10[maDay]
+		avg20 := ma20[maDay]
+
+		fail5 := dqs[i].Close <= avg5
+		fail10 := dqs[i].Close <= avg10
+		fail20 := dqs[i].Close <= avg20
+
+		if fail5 && fail10 && fail20 {
+			return i
+		}
+	}
+	return -1
+}
+
+func findGapPutClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []float64, ma10 []float64, ma20 []float64) int {
+	for i := foundDay + 1; i < interval+BASE_QDS_NR; i = i + 1 {
+		maDay := i - BASE_QDS_NR
+		avg5 := ma5[maDay]
+		avg10 := ma10[maDay]
+		avg20 := ma20[maDay]
+
+		fail5 := dqs[i].Close >= avg5
+		fail10 := dqs[i].Close >= avg10
+		fail20 := dqs[i].Close >= avg20
+
+		if fail5 && fail10 && fail20 {
+			return i
+		}
+	}
+	return -1
+}
+
+func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (DQPlot, error) {
+	const GAP_MUL float64 = 1.015
+
+	day := BASE_QDS_NR
+	totalLen := interval + BASE_QDS_NR
+	if len(dqs) != totalLen {
+		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
 		return DQPlot{}, ErrTooFewDays
+	}
+	if dqs[totalLen-1].Volume < 300 {
+		return DQPlot{}, ErrNotInsterested
 	}
 
 	findings := 0
+	foundDay := -1
 	candle := []DQCandle{}
 	hline := []float64{}
 
-	for day > 0 {
-		dq1 := dqs[day]   // former day
-		dq2 := dqs[day-1] // current loop day
+	candle = append(candle, genCandle(dqs[day]))
+	day += 1
+	for day < totalLen {
+		dq1 := dqs[day-1] // former day
+		dq2 := dqs[day]   // current loop day
 
 		h1 := math.Max(dq1.Open, dq1.Close)
 		h2 := math.Max(dq2.Open, dq2.Close)
@@ -229,26 +277,30 @@ func findGap(code string, dqs []mydb.DaliyQuote) (DQPlot, error) {
 		l2 := math.Min(dq2.Open, dq2.Close)
 
 		highGap := l2 - h1
-		lowGap := h2 - l1
-		const GAP_MUL float64 = 1.015
+		lowGap := l1 - h2
 
 		if findings != TYPE_GAP_CALL && highGap > 0 {
 			if h1*GAP_MUL < l2 {
+				foundDay = day
 				findings = TYPE_GAP_CALL
-				hline = []float64{h1, l2}
+				hline = []float64{float64(foundDay - 1 - BASE_QDS_NR), h1, float64(foundDay - BASE_QDS_NR), l2}
 			}
 		}
 		if findings != TYPE_GAP_PUT && lowGap > 0 {
-			if l1 > h2*GAP_MUL {
+			if h2*GAP_MUL < l1 {
+				foundDay = day
 				findings = TYPE_GAP_PUT
-				hline = []float64{l1, h2}
+				hline = []float64{float64(foundDay - 1 - BASE_QDS_NR), l1, float64(foundDay - BASE_QDS_NR), h2}
 			}
 		}
 
-		candle = append(candle, genCandle(dq1))
-		day -= 1
+		if tblName == "stk3041" {
+			fmt.Printf("fd=%d h=%f,%f l=%f,%f finding=%s\n", foundDay-BASE_QDS_NR, h1, h2, l1, l2, TypeToStr(findings))
+		}
+
+		candle = append(candle, genCandle(dq2))
+		day += 1
 	}
-	candle = append(candle, genCandle(dqs[0]))
 
 	if findings == 0 {
 		return DQPlot{}, ErrNotInsterested
@@ -258,27 +310,32 @@ func findGap(code string, dqs []mydb.DaliyQuote) (DQPlot, error) {
 	ma10 := genMA(dqs, 10)
 	ma20 := genMA(dqs, 20)
 
-	avg5 := ma5[len(ma5)-1]
-	avg10 := ma10[len(ma10)-1]
-	avg20 := ma20[len(ma20)-1]
-
 	if findings == TYPE_GAP_CALL {
-		fail5 := dqs[0].Close <= avg5
-		fail10 := dqs[0].Close <= avg10
-		fail20 := dqs[0].Close <= avg20
-		if fail5 && fail10 && fail20 {
+		closeDay := findGapCallClose(interval, foundDay, dqs, ma5, ma10, ma20)
+		if closeDay == -1 && foundDay > BASE_QDS_NR+3 {
+			return DQPlot{}, ErrNotInsterested
+		}
+		lastDays := totalLen - closeDay
+		if lastDays < 3 {
 			findings = TYPE_GAP_CALL_CLOSED
+		} else {
+			return DQPlot{}, ErrNotInsterested
 		}
 	}
 	if findings == TYPE_GAP_PUT {
-		fail5 := dqs[0].Close >= avg5
-		fail10 := dqs[0].Close >= avg10
-		fail20 := dqs[0].Close >= avg20
-		if fail5 && fail10 && fail20 {
+		closeDay := findGapPutClose(interval, foundDay, dqs, ma5, ma10, ma20)
+		if closeDay == -1 && foundDay > BASE_QDS_NR+3 {
+			return DQPlot{}, ErrNotInsterested
+		}
+		lastDays := totalLen - closeDay
+		if lastDays < 3 {
 			findings = TYPE_GAP_PUT_CLOSED
+		} else {
+			return DQPlot{}, ErrNotInsterested
 		}
 	}
 
+	code, _ := strings.CutPrefix(tblName, "stk")
 	plot := genPlot(code, findings, candle, ma5, ma10, ma20, hline)
 	return plot, nil
 }

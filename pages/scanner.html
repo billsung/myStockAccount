@@ -168,8 +168,13 @@
 				 * }
 				 */
 				const plotData = replyData.forEach(dqPlot => {
-					const { code, type, candle, ma5, ma10, ma20 } = dqPlot;
+					const { code, type, candle, ma5, ma10, ma20, line } = dqPlot;
 					const ptypeStr = TypeToStr(parseInt(type))
+
+					const sp = document.createElement('span');
+					sp.id = `sp-${code}`;
+					sp.innerText = `${ptypeStr}-${code}`
+					document.getElementById('charts-container').appendChild(sp);
 
 					const canvas = document.createElement('canvas');
 					canvas.id = `chart-${code}`;
@@ -186,13 +191,31 @@
 						c: ent.close,
 					}));
 					const ma5Data = ma5.map((ent, index) => ({
-						x: index + 4,
+						x: index,
 						y: ent
 					}));
 					const ma10Data = ma10.map((ent, index) => ({
-						x: index + 9,
+						x: index,
 						y: ent
 					}));
+					const ma20Data = ma20.map((ent, index) => ({
+						x: index,
+						y: ent
+					}));
+					const hline1 = [{
+						x: line[0],
+						y: line[1]
+					}, {
+						x: interval - 1,
+						y: line[1]
+					}];
+					const hline2 = [{
+						x: line[2],
+						y: line[3]
+					}, {
+						x: interval - 1,
+						y: line[3]
+					}];
 
 					const config = {
 						type: 'candlestick',
@@ -202,6 +225,11 @@
 								{
 									label: `${code}`,
 									data: ohlcData,
+									color: {
+										up: 'rgba(215, 85, 65, 1)',
+										down: 'rgba(80, 160, 115, 1)',
+										unchanged: 'rgba(90, 90, 90, 1)'
+									}
 								},
 								{
 									label: `MA5`,
@@ -212,6 +240,24 @@
 								{
 									label: `MA10`,
 									data: ma10Data,
+									type: 'line',
+									fill: false
+								},
+								{
+									label: `MA20`,
+									data: ma20Data,
+									type: 'line',
+									fill: false
+								},
+								{
+									label: `line1`,
+									data: hline1,
+									type: 'line',
+									fill: false
+								},
+								{
+									label: `line2`,
+									data: hline2,
 									type: 'line',
 									fill: false
 								}
@@ -227,11 +273,11 @@
 									min: 0,
 									max: interval,
 									type: 'linear',
-									ticks: {
-										callback: function (value, index) {
-											return labels[index];
-										}
-									}
+									// ticks: {
+									// 	callback: function (value, index) {
+									// 		return labels[index];
+									// 	}
+									// }
 								},
 								y: {
 									min: Math.min.apply(this, ma5) * 0.9,
@@ -239,10 +285,6 @@
 								}
 							},
 							plugins: {
-								title: {
-									display: true,
-									text: `${ptypeStr}-${code}`
-								},
 								legend: {
 									position: 'top'
 								},
