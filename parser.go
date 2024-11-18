@@ -78,5 +78,10 @@ func parseEntry(entry string) (errcode int, msg string) {
 		return http.StatusInternalServerError, err.Error()
 	}
 
+	err = procTrans(transaction)
+	if err != nil {
+		return http.StatusInternalServerError, err.Error()
+	}
+
 	return http.StatusOK, ""
 }

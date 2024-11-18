@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,6 +57,60 @@ type DQPlot struct {
 	HLine  []float64  `json:"line"`
 }
 
+type OHLCData struct {
+	X int     `json:"x"`
+	O float64 `json:"o"`
+	H float64 `json:"h"`
+	L float64 `json:"l"`
+	C float64 `json:"c"`
+}
+type LineData struct {
+	X int     `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type ChartLineData struct {
+	Label string     `json:"label"`
+	Data  []LineData `json:"data"`
+	Type  string     `json:"type"`
+	Fill  bool       `json:"fill"`
+}
+type ChartCandleData struct {
+	Label string     `json:"label"`
+	Data  []OHLCData `json:"data"`
+}
+
+type ScalesAxis struct {
+	Min  float64 `json:"min"`
+	Max  float64 `json:"max"`
+	Type string  `json:"type"`
+}
+
+type ChartOptions struct {
+	Responsive bool `json:"responsive"`
+	Animation  struct {
+		Duration int `json:"duration"`
+	} `json:"animation"`
+	Scales struct {
+		X ScalesAxis `json:"x"`
+		Y ScalesAxis `json:"y"`
+	} `json:"scales"`
+	Plugins struct {
+		Legend struct {
+			Position string `json:"position"`
+		} `json:"legend"`
+	} `json:"plugins"`
+}
+
+type ChartJSConfig struct {
+	Type string `json:"type"`
+	Data struct {
+		Labels   []string      `json:"labels"`
+		Datasets []interface{} `json:"datasets"`
+	} `json:"data"`
+	Options ChartOptions `json:"options"`
+}
+
 type ScanRequest struct {
 	Op       string `json:"op"`
 	Interval int    `json:"interval"`
@@ -63,8 +118,10 @@ type ScanRequest struct {
 }
 
 type ScnaReply struct {
-	Data       []DQPlot `json:"data"`
-	NextTblIdx int      `json:"next"`
+	Configs    []ChartJSConfig `json:"data"`
+	UpCnt      int             `json:"upcnt"`
+	DwnCnt     int             `json:"dwncnt"`
+	NextTblIdx int             `json:"next"`
 }
 
 func isWeekend(t time.Time) bool {
@@ -116,7 +173,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		return
 	}
 
-	var plot DQPlot
+	var plot ChartJSConfig
 	var foundNr int = 0
 	for i := tblIdx; i < len(tables); i = i + 1 {
 		tblName := tables[i]
@@ -148,7 +205,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		}
 
 		fmt.Printf("Found candidate %s+\n", tblName)
-		reply.Data = append(reply.Data, plot)
+		reply.Configs = append(reply.Configs, plot)
 		foundNr += 1
 
 		// TEMP
@@ -194,6 +251,15 @@ func genMA(dqs []mydb.DaliyQuote, maNr int) []float64 {
 	return ma
 }
 
+func genMACLD(name string, ma []float64) ChartLineData {
+	interval := len(ma)
+	lds := []LineData{}
+	for i := 0; i < interval; i = i + 1 {
+		lds = append(lds, LineData{X: i, Y: ma[i]})
+	}
+	return ChartLineData{Label: name, Data: lds, Type: "line", Fill: false}
+}
+
 func genCandle(dq mydb.DaliyQuote) DQCandle {
 	candle := DQCandle{Date: fmt.Sprintf("%04d%02d%02d", dq.Year, dq.Month, dq.Day), Open: dq.Open, High: dq.High, Low: dq.Low, Close: dq.Close}
 	return candle
@@ -209,13 +275,60 @@ func genPlot(code string, ftype int, candle []DQCandle, ma5 []float64, ma10 []fl
 	plot.HLine = hline
 	return plot
 }
+func genChartLineData(name string, ld LineData, eld LineData) ChartLineData {
+	return ChartLineData{Label: name, Data: []LineData{ld, eld}, Type: "line", Fill: false}
+}
+func genOHLCData(dq mydb.DaliyQuote, idx int) OHLCData {
+	return OHLCData{X: idx, O: dq.Open, H: dq.High, L: dq.Low, C: dq.Close}
+}
+func genCandleData(code string, ohlcs []OHLCData) ChartCandleData {
+	return ChartCandleData{Label: code, Data: ohlcs}
+}
+func genConfig(ccd ChartCandleData, ma5 ChartLineData, ma10 ChartLineData, ma20 ChartLineData, hl1 ChartLineData, hl2 ChartLineData) ChartJSConfig {
+	var ymin float64 = math.MaxFloat64
+	var ymax float64 = 0
+	interval := len(ccd.Data)
+	labels := make([]string, interval)
+	for i := 0; i < interval; i += 1 {
+		labels[i] = strconv.FormatInt(int64(i), 10)
+		ymin = math.Min(ymin, ccd.Data[i].L)
+		ymax = math.Max(ymax, ccd.Data[i].H)
+	}
+
+	config := ChartJSConfig{}
+	config.Type = "candlestick"
+	config.Data.Labels = labels
+	config.Data.Datasets = append(config.Data.Datasets, ccd)
+	config.Data.Datasets = append(config.Data.Datasets, ma5)
+	config.Data.Datasets = append(config.Data.Datasets, ma10)
+	config.Data.Datasets = append(config.Data.Datasets, ma20)
+	config.Data.Datasets = append(config.Data.Datasets, hl1)
+	config.Data.Datasets = append(config.Data.Datasets, hl2)
+
+	config.Options.Responsive = true
+	config.Options.Animation.Duration = 0
+	config.Options.Scales.X.Min = 0
+	config.Options.Scales.X.Max = float64(interval)
+	config.Options.Scales.X.Type = "linear"
+	config.Options.Scales.Y.Min = ymin * 0.95
+	config.Options.Scales.Y.Max = ymax * 1.05
+	config.Options.Scales.Y.Type = "linear"
+	config.Options.Plugins.Legend.Position = "top"
+
+	return config
+}
 
 func findGapCallClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []float64, ma10 []float64, ma20 []float64) int {
+	base := math.Min(dqs[foundDay].Open, dqs[foundDay].Close)
 	for i := foundDay + 1; i < interval+BASE_QDS_NR; i = i + 1 {
 		maDay := i - BASE_QDS_NR
 		avg5 := ma5[maDay]
 		avg10 := ma10[maDay]
 		avg20 := ma20[maDay]
+
+		if avg10 > base {
+			continue
+		}
 
 		fail5 := dqs[i].Close <= avg5
 		fail10 := dqs[i].Close <= avg10
@@ -229,11 +342,16 @@ func findGapCallClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []f
 }
 
 func findGapPutClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []float64, ma10 []float64, ma20 []float64) int {
+	base := math.Max(dqs[foundDay].Open, dqs[foundDay].Close)
 	for i := foundDay + 1; i < interval+BASE_QDS_NR; i = i + 1 {
 		maDay := i - BASE_QDS_NR
 		avg5 := ma5[maDay]
 		avg10 := ma10[maDay]
 		avg20 := ma20[maDay]
+
+		if avg10 < base {
+			continue
+		}
 
 		fail5 := dqs[i].Close >= avg5
 		fail10 := dqs[i].Close >= avg10
@@ -246,25 +364,27 @@ func findGapPutClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []fl
 	return -1
 }
 
-func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (DQPlot, error) {
-	const GAP_MUL float64 = 1.015
+func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ChartJSConfig, error) {
+	const GAP_MUL float64 = 1.02
 
 	day := BASE_QDS_NR
 	totalLen := interval + BASE_QDS_NR
 	if len(dqs) != totalLen {
 		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
-		return DQPlot{}, ErrTooFewDays
+		return ChartJSConfig{}, ErrTooFewDays
 	}
 	if dqs[totalLen-1].Volume < 300 {
-		return DQPlot{}, ErrNotInsterested
+		return ChartJSConfig{}, ErrNotInsterested
 	}
 
 	findings := 0
 	foundDay := -1
-	candle := []DQCandle{}
-	hline := []float64{}
+	foundGap := 0.0
+	ohlc := []OHLCData{}
+	hline1 := ChartLineData{}
+	hline2 := ChartLineData{}
 
-	candle = append(candle, genCandle(dqs[day]))
+	ohlc = append(ohlc, genOHLCData(dqs[day], day-BASE_QDS_NR))
 	day += 1
 	for day < totalLen {
 		dq1 := dqs[day-1] // former day
@@ -279,31 +399,35 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (DQPlot, error
 		highGap := l2 - h1
 		lowGap := l1 - h2
 
-		if findings != TYPE_GAP_CALL && highGap > 0 {
+		if (findings != TYPE_GAP_CALL || highGap > foundGap) && highGap > 0 {
 			if h1*GAP_MUL < l2 {
 				foundDay = day
 				findings = TYPE_GAP_CALL
-				hline = []float64{float64(foundDay - 1 - BASE_QDS_NR), h1, float64(foundDay - BASE_QDS_NR), l2}
+				foundGap = highGap
+				hline1 = genChartLineData("upper", LineData{X: foundDay - BASE_QDS_NR, Y: l2}, LineData{X: interval, Y: l2})
+				hline2 = genChartLineData("downer", LineData{X: foundDay - 1 - BASE_QDS_NR, Y: h1}, LineData{X: interval, Y: h1})
 			}
 		}
-		if findings != TYPE_GAP_PUT && lowGap > 0 {
+		if (findings != TYPE_GAP_PUT || lowGap > foundGap) && lowGap > 0 {
 			if h2*GAP_MUL < l1 {
 				foundDay = day
 				findings = TYPE_GAP_PUT
-				hline = []float64{float64(foundDay - 1 - BASE_QDS_NR), l1, float64(foundDay - BASE_QDS_NR), h2}
+				foundGap = lowGap
+				hline1 = genChartLineData("upper", LineData{X: foundDay - 1 - BASE_QDS_NR, Y: l1}, LineData{X: interval, Y: l1})
+				hline2 = genChartLineData("downer", LineData{X: foundDay - BASE_QDS_NR, Y: h2}, LineData{X: interval, Y: h2})
 			}
 		}
 
-		if tblName == "stk3041" {
-			fmt.Printf("fd=%d h=%f,%f l=%f,%f finding=%s\n", foundDay-BASE_QDS_NR, h1, h2, l1, l2, TypeToStr(findings))
-		}
+		// if tblName == "stk6706" {
+		// 	fmt.Printf("fd=%d h=%f,%f l=%f,%f finding=%s\n", foundDay-BASE_QDS_NR, h1, h2, l1, l2, TypeToStr(findings))
+		// }
 
-		candle = append(candle, genCandle(dq2))
+		ohlc = append(ohlc, genOHLCData(dq2, day-BASE_QDS_NR))
 		day += 1
 	}
 
 	if findings == 0 {
-		return DQPlot{}, ErrNotInsterested
+		return ChartJSConfig{}, ErrNotInsterested
 	}
 
 	ma5 := genMA(dqs, 5)
@@ -312,30 +436,31 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (DQPlot, error
 
 	if findings == TYPE_GAP_CALL {
 		closeDay := findGapCallClose(interval, foundDay, dqs, ma5, ma10, ma20)
-		if closeDay == -1 && foundDay > BASE_QDS_NR+3 {
-			return DQPlot{}, ErrNotInsterested
+		if closeDay == -1 && foundDay < (totalLen-4) {
+			return ChartJSConfig{}, ErrNotInsterested
 		}
 		lastDays := totalLen - closeDay
 		if lastDays < 3 {
 			findings = TYPE_GAP_CALL_CLOSED
 		} else {
-			return DQPlot{}, ErrNotInsterested
+			return ChartJSConfig{}, ErrNotInsterested
 		}
 	}
 	if findings == TYPE_GAP_PUT {
 		closeDay := findGapPutClose(interval, foundDay, dqs, ma5, ma10, ma20)
-		if closeDay == -1 && foundDay > BASE_QDS_NR+3 {
-			return DQPlot{}, ErrNotInsterested
+		if closeDay == -1 && foundDay < (totalLen-4) {
+			return ChartJSConfig{}, ErrNotInsterested
 		}
 		lastDays := totalLen - closeDay
 		if lastDays < 3 {
 			findings = TYPE_GAP_PUT_CLOSED
 		} else {
-			return DQPlot{}, ErrNotInsterested
+			return ChartJSConfig{}, ErrNotInsterested
 		}
 	}
 
 	code, _ := strings.CutPrefix(tblName, "stk")
-	plot := genPlot(code, findings, candle, ma5, ma10, ma20, hline)
+	candleData := genCandleData(code, ohlc)
+	plot := genConfig(candleData, genMACLD("ma5", ma5), genMACLD("ma10", ma10), genMACLD("ma20", ma20), hline1, hline2)
 	return plot, nil
 }

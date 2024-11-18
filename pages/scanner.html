@@ -22,6 +22,16 @@
 		float: left;
 		width: 16em
 	}
+
+	.stk_name {
+		font-size: 20px;
+		margin-right: 10px;
+		font-family: sans-serif;
+	}
+
+	.stk_type {
+		font-size: 20px;
+	}
 </style>
 
 <head>
@@ -55,7 +65,7 @@
 			</div>
 			<div class="statis_box">
 				<span>Downard Signs:</span>
-				<span id="doward"></span>
+				<span id="downward"></span>
 			</div>
 			<div class="statis_box">
 				<span>Total:</span>
@@ -65,7 +75,12 @@
 	</div>
 
 	<!-- Canvas element to draw the chart -->
-	<div id="charts-container"></div>
+	<div id="charts-container">
+		<div id="template">
+			<a id="stk-name-" class="stk_name" target="_blank"></a><span id="stk-type-" class="stk_type"></span>
+		</div>
+	</div>
+	</div>
 
 	<!-- Add Chart.js from CDN -->
 	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -112,11 +127,17 @@
 			}
 		}
 
+		var up = 0;
+		var down = 0;
 		async function getGaps() {
 			const interval = parseInt(document.getElementById('interval').value, 10);
 			if (interval < 10) {
 				logError("Interval cannot less then 10")
 			}
+
+			document.getElementById('upward').innerText = 0;
+			document.getElementById('downward').innerText = 0;
+			document.getElementById('total').innerText = 0;
 
 			const query = {
 				method: 'POST',
@@ -129,16 +150,28 @@
 			await fetchScan(query)
 		}
 
-		function TypeToStr(t) {
+		function GapTypeToStr(t) {
 			switch (t) {
 				case 1:
-					return "Call"
+					up += 1;
+					document.getElementById('upward').innerText = up;
+					document.getElementById('total').innerText = up + down;
+					return "↑Call"
 				case 2:
-					return "Put"
+					down += 1;
+					document.getElementById('downward').innerText = down;
+					document.getElementById('total').innerText = up + down;
+					return "↓Put"
 				case 3:
-					return "CallClosed"
+					down += 1;
+					document.getElementById('downward').innerText = down;
+					document.getElementById('total').innerText = up + down;
+					return "↓CallClosed"
 				case 4:
-					return "PutClosed"
+					up += 1;
+					document.getElementById('upward').innerText = up;
+					document.getElementById('total').innerText = up + down;
+					return "↑PutClosed"
 			}
 			return ""
 		}
@@ -167,132 +200,31 @@
 				 * HLine  []float64  `json:"line"`
 				 * }
 				 */
-				const plotData = replyData.forEach(dqPlot => {
-					const { code, type, candle, ma5, ma10, ma20, line } = dqPlot;
-					const ptypeStr = TypeToStr(parseInt(type))
-
-					const sp = document.createElement('span');
-					sp.id = `sp-${code}`;
-					sp.innerText = `${ptypeStr}-${code}`
-					document.getElementById('charts-container').appendChild(sp);
+				const plotData = replyData.forEach(config => {
+					var clone = document.getElementById('template').cloneNode(true)
+					const code = config.data.datasets[0].label
+					clone.id = `div-`
+					const elementsThatHaveId = [...clone.querySelectorAll('[id]')];
+					if (clone.matches('[id]')) {
+						elementsThatHaveId.push(clone);
+					}
+					elementsThatHaveId.forEach((e) => {
+						if (e.id == "stk-name-") {
+							e.innerText = `${code}`
+							e.href = `https://tw.stock.yahoo.com/quote/${code}.TW/technical-analysis`
+						} else if (e.id == "stk-type-") {
+							e.innerText = `TODO`
+						}
+						e.id += `${code}`;
+					});
 
 					const canvas = document.createElement('canvas');
-					canvas.id = `chart-${code}`;
 					canvas.width = 800;
 					canvas.height = 400;
-					document.getElementById('charts-container').appendChild(canvas);
+					clone.appendChild(canvas);
+					document.getElementById('charts-container').appendChild(clone);
 
-					labels = candle.map(ent => ent.date);
-					const ohlcData = candle.map((ent, index) => ({
-						x: index,
-						o: ent.open,
-						h: ent.high,
-						l: ent.low,
-						c: ent.close,
-					}));
-					const ma5Data = ma5.map((ent, index) => ({
-						x: index,
-						y: ent
-					}));
-					const ma10Data = ma10.map((ent, index) => ({
-						x: index,
-						y: ent
-					}));
-					const ma20Data = ma20.map((ent, index) => ({
-						x: index,
-						y: ent
-					}));
-					const hline1 = [{
-						x: line[0],
-						y: line[1]
-					}, {
-						x: interval - 1,
-						y: line[1]
-					}];
-					const hline2 = [{
-						x: line[2],
-						y: line[3]
-					}, {
-						x: interval - 1,
-						y: line[3]
-					}];
-
-					const config = {
-						type: 'candlestick',
-						data: {
-							labels: labels,
-							datasets: [
-								{
-									label: `${code}`,
-									data: ohlcData,
-									color: {
-										up: 'rgba(215, 85, 65, 1)',
-										down: 'rgba(80, 160, 115, 1)',
-										unchanged: 'rgba(90, 90, 90, 1)'
-									}
-								},
-								{
-									label: `MA5`,
-									data: ma5Data,
-									type: 'line',
-									fill: false
-								},
-								{
-									label: `MA10`,
-									data: ma10Data,
-									type: 'line',
-									fill: false
-								},
-								{
-									label: `MA20`,
-									data: ma20Data,
-									type: 'line',
-									fill: false
-								},
-								{
-									label: `line1`,
-									data: hline1,
-									type: 'line',
-									fill: false
-								},
-								{
-									label: `line2`,
-									data: hline2,
-									type: 'line',
-									fill: false
-								}
-							]
-						},
-						options: {
-							responsive: true,
-							animation: {
-								duration: 0
-							},
-							scales: {
-								x: {
-									min: 0,
-									max: interval,
-									type: 'linear',
-									// ticks: {
-									// 	callback: function (value, index) {
-									// 		return labels[index];
-									// 	}
-									// }
-								},
-								y: {
-									min: Math.min.apply(this, ma5) * 0.9,
-									max: Math.max.apply(this, ma5) * 1.1
-								}
-							},
-							plugins: {
-								legend: {
-									position: 'top'
-								},
-							},
-						}
-					}
-
-					logInfo(config)
+					// logInfo(config)
 					new Chart(canvas, config);
 				});
 
