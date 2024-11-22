@@ -174,7 +174,7 @@ func genMA(dqs []mydb.DaliyQuote, maNr int) []DataPoint {
 		sum += dqs[i].Close
 		val := sum / float64(maNr)
 		mmdd := fmt.Sprintf("%02d%02d", dqs[i].Month, dqs[i].Day)
-		ma = append(ma, toMADataPoint(mmdd, val))
+		ma = append(ma, GenMADataPoint(mmdd, val))
 		// fmt.Printf("[%d] sum=%f(%f) ma=%f\n", i, sum, dqs[i].Close, ma)
 		sum -= dqs[i-maNr+1].Close
 		// fmt.Printf("sum=%f(%f)\n", sum, dqs[i-maNr+1].Close)
@@ -191,21 +191,4 @@ func toCandleDataPoint(mmdd string, dq *mydb.DaliyQuote) DataPoint {
 }
 func toVolumeDataPoint(mmdd string, dq *mydb.DaliyQuote) DataPoint {
 	return GenVolumeDataPoint(mmdd, dq.Volume)
-}
-func toMADataPoint(mmdd string, val float64) DataPoint {
-	return GenMADataPoint(mmdd, val)
-}
-
-func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, error) {
-	// day := BASE_QDS_NR
-	totalLen := interval + BASE_QDS_NR
-	if len(dqs) != totalLen {
-		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
-		return ScanResult{}, ErrTooFewDays
-	}
-	if dqs[totalLen-1].Volume < 300 {
-		return ScanResult{}, ErrNotInsterested
-	}
-
-	return ScanResult{}, nil
 }

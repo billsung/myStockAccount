@@ -50,7 +50,7 @@
 			<span>months&nbsp</span>
 			<button type="button" onclick="getGaps()">K-Gaps</button>
 			<button type="button" onclick="getFlags()" disabled>K-Flags</button>
-			<button type="button" onclick="getBurst()" disabled>Vol-Burst</button>
+			<button type="button" onclick="getVolBurst()">Vol-Burst</button>
 		</div>
 		<div class="right">
 			<button type="button" onclick="mainPage()">Main Page</button>
@@ -211,6 +211,14 @@
 			clearPlot();
 			const interval = parseInt(document.getElementById('interval').value, 10);
 			try {
+				logInfo(results)
+				if (results[0] == null) {
+					const h3 = document.createElement('h3')
+					h3.innerText = "NoDataFound"
+					document.getElementById('charts-container').appendChild(h3);
+					return
+				}
+
 				var idx = 0
 				results.forEach(res => {
 					var clone = document.getElementById('template').cloneNode(true)
