@@ -94,16 +94,16 @@
 			console.log(str);
 		}
 
-		let configs = []
+		let results = []
 		async function fetchScan(query, _op) {
 			try {
 				const response = await fetch('http://localhost:8080/scanner', query);
 				if (response.ok) {
-					const result = await response.json();
-					configs = configs.concat(result.config)
-					if (result.next != -1) {
+					const reply = await response.json();
+					results = results.concat(reply.result)
+					if (reply.next != -1) {
 						const interval = parseInt(document.getElementById('interval').value, 10);
-						const next = parseInt(result.next)
+						const next = parseInt(reply.next)
 						const newquery = {
 							method: 'POST',
 							headers: {
@@ -212,8 +212,10 @@
 			const interval = parseInt(document.getElementById('interval').value, 10);
 			try {
 				var idx = 0
-				const plotData = configs.forEach(config => {
+				results.forEach(res => {
 					var clone = document.getElementById('template').cloneNode(true)
+					const config = res.config
+					const info = res.info
 					const code = config.data.datasets[0].label
 					clone.id = `div-`
 					const elementsThatHaveId = [...clone.querySelectorAll('[id]')];
@@ -225,7 +227,7 @@
 							e.innerText = `${code}`
 							e.href = `https://tw.stock.yahoo.com/quote/${code}.TW/technical-analysis`
 						} else if (e.id == "stk-type-") {
-							e.innerText = `TODO`
+							e.innerText = `${info}`
 						}
 						e.id += `${code}`;
 					});
@@ -236,7 +238,7 @@
 					canvas.height = 300;
 					clone.appendChild(canvas);
 
-					logInfo(config)
+					// logInfo(config)
 					new Chart(canvas, config);
 
 					document.getElementById('charts-container').appendChild(clone);
@@ -247,7 +249,7 @@
 				console.error("Catched error:", error);
 			}
 
-			configs = []
+			results = []
 		}
 
 

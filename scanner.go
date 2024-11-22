@@ -36,6 +36,11 @@ func TypeToStr(t int) string {
 	return ""
 }
 
+type ScanResult struct {
+	Config ChartConfig `json:"config"`
+	Info   string      `json:"info,omitempty"`
+}
+
 type ScanRequest struct {
 	Op       string `json:"op"`
 	Interval int    `json:"interval"`
@@ -43,9 +48,8 @@ type ScanRequest struct {
 }
 
 type ScnaReply struct {
-	Config     []ChartConfig `json:"config"`
-	Info       []string      `json:"info,omitempty"`
-	NextTblIdx int           `json:"next"`
+	Result     []ScanResult `json:"result"`
+	NextTblIdx int          `json:"next"`
 }
 
 func isWeekend(t time.Time) bool {
@@ -97,7 +101,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		return
 	}
 
-	var config ChartConfig
+	var result ScanResult
 	var foundNr int = 0
 	for i := tblIdx; i < len(tables); i = i + 1 {
 		tblName := tables[i]
@@ -112,9 +116,9 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 
 		switch op {
 		case "gap":
-			config, err = findGap(tblName, interval, dqs)
+			result, err = findGap(tblName, interval, dqs)
 		case "vol-burst":
-			config, err = findVolBurst(tblName, interval, dqs)
+			result, err = findVolBurst(tblName, interval, dqs)
 		default:
 			writeJSONErrResonse(w, "No such op code", http.StatusBadRequest)
 			fmt.Println("No such op code", op)
@@ -131,7 +135,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		}
 
 		fmt.Printf("Found candidate %s+\n", tblName)
-		reply.Config = append(reply.Config, config)
+		reply.Result = append(reply.Result, result)
 		foundNr += 1
 
 		// TEMP
@@ -192,16 +196,16 @@ func toMADataPoint(mmdd string, val float64) DataPoint {
 	return GenMADataPoint(mmdd, val)
 }
 
-func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (ChartConfig, error) {
+func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, error) {
 	// day := BASE_QDS_NR
 	totalLen := interval + BASE_QDS_NR
 	if len(dqs) != totalLen {
 		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
-		return ChartConfig{}, ErrTooFewDays
+		return ScanResult{}, ErrTooFewDays
 	}
 	if dqs[totalLen-1].Volume < 300 {
-		return ChartConfig{}, ErrNotInsterested
+		return ScanResult{}, ErrNotInsterested
 	}
 
-	return ChartConfig{}, nil
+	return ScanResult{}, nil
 }

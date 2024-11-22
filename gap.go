@@ -60,17 +60,17 @@ func genLineDP(dq *mydb.DaliyQuote, dqEnd *mydb.DaliyQuote, y float64) []DataPoi
 	return []DataPoint{a, b}
 }
 
-func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ChartConfig, error) {
+func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, error) {
 	const GAP_MUL float64 = 1.02
 
 	day := BASE_QDS_NR
 	totalLen := interval + BASE_QDS_NR
 	if len(dqs) != totalLen {
 		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
-		return ChartConfig{}, ErrTooFewDays
+		return ScanResult{}, ErrTooFewDays
 	}
 	if dqs[totalLen-1].Volume < 300 {
-		return ChartConfig{}, ErrNotInsterested
+		return ScanResult{}, ErrNotInsterested
 	}
 
 	findings := 0
@@ -132,7 +132,7 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ChartConfig, 
 	}
 
 	if findings == 0 {
-		return ChartConfig{}, ErrNotInsterested
+		return ScanResult{}, ErrNotInsterested
 	}
 
 	ma5 := genMA(dqs, 5)
@@ -142,25 +142,25 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ChartConfig, 
 	if findings == TYPE_GAP_CALL {
 		closeDay := findGapCallClose(interval, foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
-			return ChartConfig{}, ErrNotInsterested
+			return ScanResult{}, ErrNotInsterested
 		}
 		lastDays := totalLen - closeDay
 		if lastDays < 3 {
 			findings = TYPE_GAP_CALL_CLOSED
 		} else {
-			return ChartConfig{}, ErrNotInsterested
+			return ScanResult{}, ErrNotInsterested
 		}
 	}
 	if findings == TYPE_GAP_PUT {
 		closeDay := findGapPutClose(interval, foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
-			return ChartConfig{}, ErrNotInsterested
+			return ScanResult{}, ErrNotInsterested
 		}
 		lastDays := totalLen - closeDay
 		if lastDays < 3 {
 			findings = TYPE_GAP_PUT_CLOSED
 		} else {
-			return ChartConfig{}, ErrNotInsterested
+			return ScanResult{}, ErrNotInsterested
 		}
 	}
 
@@ -175,5 +175,5 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ChartConfig, 
 	dataset = append(dataset, hline2)
 
 	config := GenChartConfig(labels, dataset)
-	return config, nil
+	return ScanResult{Config: config, Info: TypeToStr(findings)}, nil
 }
