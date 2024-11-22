@@ -168,7 +168,7 @@ func FindPrevDailyQuote(code string, y int, m int, d int) (dq DaliyQuote, err er
 	return dq, err
 }
 
-func AddDailyQuote(code string, dq DaliyQuote) error {
+func AddDailyQuote(code string, dq *DaliyQuote) error {
 	err := checkStockTbl(code)
 	if err != nil {
 		return err

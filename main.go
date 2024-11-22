@@ -57,7 +57,7 @@ func main() {
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "./pages/index.html")
+	http.ServeFile(w, r, "./web/index.html")
 }
 
 func transactionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +100,7 @@ func addRefHandler(w http.ResponseWriter, r *http.Request) {
 func statisticHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		http.ServeFile(w, r, "./pages/statistics.html")
+		http.ServeFile(w, r, "./web/statistics.html")
 	case "POST":
 		doStatistic(w, r)
 	default:
@@ -111,7 +111,7 @@ func statisticHandler(w http.ResponseWriter, r *http.Request) {
 func scannerHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		http.ServeFile(w, r, "./pages/scanner.html")
+		http.ServeFile(w, r, "./web/scanner.html")
 	case "POST":
 		doScan(w, r)
 	default:

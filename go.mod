@@ -1,4 +1,4 @@
-module myStock
+module MyStock
 
 go 1.21.3
 

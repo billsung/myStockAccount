@@ -94,13 +94,13 @@
 			console.log(str);
 		}
 
-		let replyData = []
-		async function fetchScan(query) {
+		let configs = []
+		async function fetchScan(query, _op) {
 			try {
 				const response = await fetch('http://localhost:8080/scanner', query);
 				if (response.ok) {
 					const result = await response.json();
-					replyData = replyData.concat(result.data)
+					configs = configs.concat(result.config)
 					if (result.next != -1) {
 						const interval = parseInt(document.getElementById('interval').value, 10);
 						const next = parseInt(result.next)
@@ -109,10 +109,10 @@
 							headers: {
 								'Content-Type': 'application/json'
 							},
-							body: JSON.stringify({ op: "gap", interval: interval, next: next })
+							body: JSON.stringify({ op: _op, interval: interval, next: next })
 						}
 						logInfo("next=" + next)
-						await fetchScan(newquery)
+						await fetchScan(newquery, _op)
 					} else {
 						updatePlot()
 					}
@@ -135,19 +135,34 @@
 				logError("Interval cannot less then 10")
 			}
 
-			document.getElementById('upward').innerText = 0;
-			document.getElementById('downward').innerText = 0;
-			document.getElementById('total').innerText = 0;
-
+			const _op = "gap"
 			const query = {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ op: "gap", interval: interval, next: 0 })
+				body: JSON.stringify({ op: _op, interval: interval, next: 0 })
 			}
 
-			await fetchScan(query)
+			await fetchScan(query, _op)
+		}
+
+		async function getVolBurst() {
+			const interval = parseInt(document.getElementById('interval').value, 10);
+			if (interval < 5) {
+				logError("Interval cannot less then 5")
+			}
+
+			const _op = "vol-burst"
+			const query = {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ op: _op, interval: interval, next: 0 })
+
+			}
+			await fetchScan(query, _op)
 		}
 
 		function GapTypeToStr(t) {
@@ -176,31 +191,28 @@
 			return ""
 		}
 
-		let labels = []
+		function clearPlot() {
+			document.getElementById('upward').innerText = 0;
+			document.getElementById('downward').innerText = 0;
+			document.getElementById('total').innerText = 0;
+
+			const parent = document.getElementById("charts-container");
+			var nextChild = parent.firstChild
+			while (nextChild != null) {
+				child = nextChild;
+				nextChild = nextChild.nextSibling;
+				if (child.id != "template") {
+					parent.removeChild(child);;
+				}
+			}
+		}
+
 		function updatePlot() {
-			logInfo(replyData)
+			clearPlot();
 			const interval = parseInt(document.getElementById('interval').value, 10);
 			try {
-				/**
-				 * type DQCandle struct {
-				 *	Date  string  `json:"date"`
-				 *	Open  float64 `json:"open"`
-				 *	High  float64 `json:"high"`
-				 *	Low   float64 `json:"low"`
-				 *	Close float64 `json:"close"`
-				 * } 
-				 * 
-				 * type DQPlot struct {
-				 * Code   string     `json:"code"`
-				 * Type   int        `json:"type"`
-				 * Candle []DQCandle `json:"candle"`
-				 * Ma5    []float64  `json:"ma5"`
-				 * Ma10   []float64  `json:"ma10"`
-				 * Ma20   []float64  `json:"ma20"`
-				 * HLine  []float64  `json:"line"`
-				 * }
-				 */
-				const plotData = replyData.forEach(config => {
+				var idx = 0
+				const plotData = configs.forEach(config => {
 					var clone = document.getElementById('template').cloneNode(true)
 					const code = config.data.datasets[0].label
 					clone.id = `div-`
@@ -219,21 +231,26 @@
 					});
 
 					const canvas = document.createElement('canvas');
+					canvas.id = `ca-main-${code}`
 					canvas.width = 800;
-					canvas.height = 400;
+					canvas.height = 300;
 					clone.appendChild(canvas);
-					document.getElementById('charts-container').appendChild(clone);
 
-					// logInfo(config)
+					logInfo(config)
 					new Chart(canvas, config);
+
+					document.getElementById('charts-container').appendChild(clone);
+					idx = idx + 1;
 				});
 
 			} catch (error) {
 				console.error("Catched error:", error);
 			}
 
-			replyData = []
+			configs = []
 		}
+
+
 
 		function mainPage() {
 			location.href = "http://localhost:8080"

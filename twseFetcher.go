@@ -161,12 +161,12 @@ func saveDailyQuotes(dqarr [][]string, y int, m int, d int) error {
 			dq.Close = dqOld.Close
 			dq.PE = dqOld.PE
 		}
-		err = mydb.AddDailyQuote(code, dq)
+		err = mydb.AddDailyQuote(code, &dq)
 		if err != nil {
 			return err
 		}
 	}
-	fmt.Println("Save DQ Complete")
+	fmt.Println("\nSave DQ Complete")
 	return nil
 }
 
@@ -184,7 +184,7 @@ func formatToDailyQuote(entry []string, y int, m int, d int) (string, mydb.Daliy
 		return code, dq, ErrIsETF
 	}
 
-	fmt.Printf("Formating %s... %v#\r", code, entry)
+	fmt.Printf("Formating %s...#\r", code)
 
 	v, err := strconv.ParseInt(strings.Replace(entry[1], ",", "", -1), 10, 64)
 	if err != nil {
