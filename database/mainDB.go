@@ -136,10 +136,10 @@ func AddTransaction(t Transaction) (err error) {
 	t.Total = int(math.Round(t.Price * float64(t.Quantity)))
 
 	if t.Direction {
-		t.Tax = int(math.Round(float64(t.Total) * 0.003))
+		t.Tax = 0
 		t.Net = t.Total + t.Fee
 	} else {
-		t.Tax = 0
+		t.Tax = int(math.Round(float64(t.Total) * 0.003))
 		t.Net = t.Total - t.Fee - t.Tax
 	}
 
@@ -204,8 +204,20 @@ func GetTransactions(y int, m int, d int) (transactions []Transaction, err error
 func GetHolding(c string) (hs []Holding, err error) {
 	cmd := fmt.Sprintf("SELECT * FROM %s "+
 		" WHERE code = '%s'"+
-		" ORDER BY year, month, day",
+		" ORDER BY year ASC, month ASC, day ASC",
 		HOLDING_TABLENAME, c)
+	rows, err := db.Query(cmd)
+	if err != nil {
+		return hs, err
+	}
+	defer rows.Close()
+	return genHolding(rows)
+}
+
+func GetHoldingAll() (hs []Holding, err error) {
+	cmd := fmt.Sprintf("SELECT * FROM %s "+
+		" ORDER BY code",
+		HOLDING_TABLENAME)
 	rows, err := db.Query(cmd)
 	if err != nil {
 		return hs, err
@@ -230,7 +242,7 @@ func DecHolding(old Holding, nr int) (remain int, err error) {
 			" WHERE rowid IN (SELECT rowid"+
 			"	FROM "+HOLDING_TABLENAME+
 			"	WHERE code = '%s'"+
-			"	ORDER BY year, month, day"+
+			"	ORDER BY year ASC, month ASC, day ASC"+
 			"	LIMIT 1)",
 			old.Code)
 		_, err = db.Exec(cmd)
@@ -247,7 +259,7 @@ func DecHolding(old Holding, nr int) (remain int, err error) {
 		" WHERE rowid IN (SELECT rowid"+
 		"	FROM "+HOLDING_TABLENAME+
 		"	WHERE code = '%s'"+
-		"	ORDER BY year, month, day"+
+		"	ORDER BY year ASC, month ASC, day ASC"+
 		"	LIMIT 1)",
 		qty, net, old.Code)
 	_, err = db.Exec(cmd)

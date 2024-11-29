@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -138,36 +139,65 @@ func fetchTWSE(y int, m int, d int) error {
 		return ErrNoEntry
 	}
 
-	return saveDailyQuotes(dqmap.Data, y, m, d)
+	saveDailyQuotes(dqmap.Data, y, m, d)
+	fmt.Println("\nSave DQ Complete")
+	return err
 }
 
-func saveDailyQuotes(dqarr [][]string, y int, m int, d int) error {
-	for _, ent := range dqarr {
+func saveDailyQuotes(dqDatas [][]string, y int, m int, d int) error {
+	var err error = nil
+	timing := []int64{0, 0, 0}
+	tnr := []int64{0, 0, 0}
+	for _, ent := range dqDatas {
+		t0 := time.Now()
+
 		code, dq, err := formatToDailyQuote(ent, y, m, d)
 		if err == ErrIsETF {
 			continue
 		}
 		if err != nil {
-			return err
+			log.Fatalf("Error: %s\n", err.Error())
+			continue
 		}
+		t1 := time.Now()
+		timing[0] += t1.Sub(t0).Milliseconds()
+		tnr[0] += 1
+
+		existDQArr, err := mydb.GetDailyQuote(mydb.STKPREFIX+code, 1)
+		existDQ := existDQArr[0]
+		if err != nil {
+			log.Fatalf("Error: %s\n", err.Error())
+			continue
+		}
+		if existDQ.Day == d && existDQ.Month == m && existDQ.Year == y {
+			// Already exist.
+			continue
+		}
+
+		t2 := time.Now()
+		timing[1] += t2.Sub(t1).Milliseconds()
+		tnr[1] += 1
+
 		if dq.Volume == 0 {
-			dqOld, err := mydb.FindPrevDailyQuote(code, y, m, d)
-			if err != nil {
-				return err
-			}
-			dq.Open = dqOld.Close
-			dq.High = dqOld.Close
-			dq.Low = dqOld.Close
-			dq.Close = dqOld.Close
-			dq.PE = dqOld.PE
+			dq.Open = existDQ.Close
+			dq.High = existDQ.Close
+			dq.Low = existDQ.Close
+			dq.Close = existDQ.Close
+			dq.PE = existDQ.PE
 		}
 		err = mydb.AddDailyQuote(code, &dq)
 		if err != nil {
-			return err
+			log.Fatalf("Error: %s\n", err.Error())
+			continue
 		}
+
+		t3 := time.Now()
+		timing[2] += t3.Sub(t2).Milliseconds()
+		tnr[2] += 1
 	}
-	fmt.Println("\nSave DQ Complete")
-	return nil
+	fmt.Printf("Timing: Format %d(%d) Get %d(%d) Add %d(%d)\n",
+		timing[0]/tnr[0], tnr[0], timing[1]/tnr[1], tnr[1], timing[2]/tnr[2], tnr[2])
+	return err
 }
 
 func formatToDailyQuote(entry []string, y int, m int, d int) (string, mydb.DaliyQuote, error) {
@@ -184,7 +214,7 @@ func formatToDailyQuote(entry []string, y int, m int, d int) (string, mydb.Daliy
 		return code, dq, ErrIsETF
 	}
 
-	fmt.Printf("Formating %s...#\r", code)
+	fmt.Printf("Formating %s...\n", code)
 
 	v, err := strconv.ParseInt(strings.Replace(entry[1], ",", "", -1), 10, 64)
 	if err != nil {

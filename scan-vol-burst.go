@@ -33,23 +33,23 @@ func toHumanized(avg int64) string {
 	return fmt.Sprintf("%d%s", avg, unit)
 }
 
-func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, error) {
+func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error) {
 	const BURST_MUL int64 = 4
 
 	totalLen := interval + BASE_QDS_NR
 	if len(dqs) != totalLen {
 		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
-		return ScanResult{}, ErrTooFewDays
+		return Result{}, ErrTooFewDays
 	}
-	if dqs[totalLen-1].Volume < 300 {
-		return ScanResult{}, ErrNotInsterested
+	if dqs[totalLen-1].Volume < MIN_INTRESTED_VOL {
+		return Result{}, ErrNotInsterested
 	}
 
 	if dqs[totalLen-1].Close < dqs[totalLen-1].Open {
 		diff := dqs[totalLen-1].Open - dqs[totalLen-1].Close
 		bottomShadowLen := dqs[totalLen-1].Low - dqs[totalLen-1].Close
 		if bottomShadowLen < diff*2 {
-			return ScanResult{}, ErrNotInsterested
+			return Result{}, ErrNotInsterested
 		}
 	}
 
@@ -71,7 +71,7 @@ func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResu
 	labels = append(labels, mmdd)
 
 	if avg*BURST_MUL >= dqs[totalLen-1].Volume {
-		return ScanResult{}, ErrNotInsterested
+		return Result{}, ErrNotInsterested
 	}
 
 	ma5 := genMA(dqs, 5)
@@ -85,7 +85,7 @@ func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResu
 	dataset = append(dataset, GenLineDataset("ma10", ma10, MA10_YELLOW))
 	dataset = append(dataset, GenLineDataset("ma20", ma20, MA20_PURPLE))
 
-	config := GenChartConfig(labels, dataset)
-	info := fmt.Sprintf("avg=%s(x%.2f)", toHumanized(avg), float64(dqs[totalLen-1].Volume)/float64(avg))
-	return ScanResult{Config: config, Info: info}, nil
+	config := GenCandleStickChartConfig(labels, dataset)
+	info := fmt.Sprintf("avg=%s(x%.2f)", toHumanized(avg/1000), float64(dqs[totalLen-1].Volume)/float64(avg))
+	return Result{Config: config, Info: info}, nil
 }

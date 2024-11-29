@@ -10,7 +10,7 @@
 
     .left {
         width: 40%;
-        float:left;
+        float: left;
     }
 
     .right {
@@ -22,6 +22,16 @@
         float: left;
         width: 16em
     }
+
+    .mainGraph {
+        width: 70%;
+        float: left;
+    }
+
+    .sideInfo {
+        width: 30%;
+        float: right;
+    }
 </style>
 
 <head>
@@ -30,7 +40,7 @@
     <title>Realized Profit</title>
 </head>
 
-<body>
+<body onload="getHolding()">
     <h1>Realized Profit Checker</h1>
 
     <div class="row">
@@ -64,7 +74,14 @@
     </div>
 
     <!-- Canvas element to draw the chart -->
-    <canvas id="myChart" width="400" height="200"></canvas>
+    <div class="row">
+        <div class="mainGraph">
+            <canvas id="myChart" width="400" height="200"></canvas>
+        </div>
+        <div class="sideInfo">
+            <canvas id="myHoldings" width="400" height="400"></canvas>
+        </div>
+    </div>
 
     <!-- Add Chart.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -132,6 +149,7 @@
         };
 
         // Create the chart
+        var myHoldingChart;
         const myChart = new Chart(
             document.getElementById('myChart'),
             config
@@ -142,6 +160,34 @@
             myChart.data.labels = labels;
             myChart.data.datasets[0].data = data;
             myChart.update();
+        }
+
+        async function getHolding() {
+            const payload = {
+                op: "holding",
+            }
+
+            try {
+                const response = await fetch('http://localhost:8080/statistics', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    const reply = await response.json();
+                    const holdingChart = document.getElementById('myHoldings')
+                    logInfo(reply)
+
+                    myHoldingChart = new Chart(holdingChart, reply.result[0].config)
+                } else {
+                    const errorData = await response.json();
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            }
         }
 
         async function getGains() {

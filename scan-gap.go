@@ -60,17 +60,17 @@ func genLineDP(dq *mydb.DaliyQuote, dqEnd *mydb.DaliyQuote, y float64) []DataPoi
 	return []DataPoint{a, b}
 }
 
-func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, error) {
+func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error) {
 	const GAP_MUL float64 = 1.02
 
 	day := BASE_QDS_NR
 	totalLen := interval + BASE_QDS_NR
 	if len(dqs) != totalLen {
 		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
-		return ScanResult{}, ErrTooFewDays
+		return Result{}, ErrTooFewDays
 	}
-	if dqs[totalLen-1].Volume < 300 {
-		return ScanResult{}, ErrNotInsterested
+	if dqs[totalLen-1].Volume < MIN_INTRESTED_VOL {
+		return Result{}, ErrNotInsterested
 	}
 
 	findings := 0
@@ -132,7 +132,7 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, e
 	}
 
 	if findings == 0 {
-		return ScanResult{}, ErrNotInsterested
+		return Result{}, ErrNotInsterested
 	}
 
 	ma5 := genMA(dqs, 5)
@@ -142,25 +142,25 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, e
 	if findings == TYPE_GAP_CALL {
 		closeDay := findGapCallClose(interval, foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
-			return ScanResult{}, ErrNotInsterested
+			return Result{}, ErrNotInsterested
 		}
 		lastDays := totalLen - closeDay
 		if lastDays < 3 {
 			findings = TYPE_GAP_CALL_CLOSED
 		} else {
-			return ScanResult{}, ErrNotInsterested
+			return Result{}, ErrNotInsterested
 		}
 	}
 	if findings == TYPE_GAP_PUT {
 		closeDay := findGapPutClose(interval, foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
-			return ScanResult{}, ErrNotInsterested
+			return Result{}, ErrNotInsterested
 		}
 		lastDays := totalLen - closeDay
 		if lastDays < 3 {
 			findings = TYPE_GAP_PUT_CLOSED
 		} else {
-			return ScanResult{}, ErrNotInsterested
+			return Result{}, ErrNotInsterested
 		}
 	}
 
@@ -174,6 +174,6 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (ScanResult, e
 	dataset = append(dataset, hline1)
 	dataset = append(dataset, hline2)
 
-	config := GenChartConfig(labels, dataset)
-	return ScanResult{Config: config, Info: TypeToStr(findings)}, nil
+	config := GenCandleStickChartConfig(labels, dataset)
+	return Result{Config: config, Info: TypeToStr(findings)}, nil
 }

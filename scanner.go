@@ -14,6 +14,7 @@ var ErrTooFewDays error = errors.New("too few days")
 var ErrNotInsterested error = errors.New("not interested")
 
 const BASE_QDS_NR int = 19
+const MIN_INTRESTED_VOL int64 = 300000 // qty 300,000
 
 const MAX_TRANSMIT_SIZE int = 32
 
@@ -36,8 +37,8 @@ func TypeToStr(t int) string {
 	return ""
 }
 
-type ScanResult struct {
-	Config ChartConfig `json:"config"`
+type Result struct {
+	Config interface{} `json:"config"`
 	Info   string      `json:"info,omitempty"`
 }
 
@@ -47,9 +48,9 @@ type ScanRequest struct {
 	Next     int    `json:"next"`
 }
 
-type ScnaReply struct {
-	Result     []ScanResult `json:"result"`
-	NextTblIdx int          `json:"next"`
+type Reply struct {
+	Result     []Result `json:"result"`
+	NextTblIdx int      `json:"next"`
 }
 
 func isWeekend(t time.Time) bool {
@@ -86,7 +87,7 @@ func doScan(w http.ResponseWriter, r *http.Request) {
 }
 
 func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
-	reply := ScnaReply{}
+	reply := Reply{}
 
 	if tblIdx < 0 {
 		writeJSONErrResonse(w, "Invalid table index", http.StatusBadRequest)
@@ -101,7 +102,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		return
 	}
 
-	var result ScanResult
+	var result Result
 	var foundNr int = 0
 	for i := tblIdx; i < len(tables); i = i + 1 {
 		tblName := tables[i]
@@ -174,7 +175,7 @@ func genMA(dqs []mydb.DaliyQuote, maNr int) []DataPoint {
 		sum += dqs[i].Close
 		val := sum / float64(maNr)
 		mmdd := fmt.Sprintf("%02d%02d", dqs[i].Month, dqs[i].Day)
-		ma = append(ma, GenMADataPoint(mmdd, val))
+		ma = append(ma, GenXYDataPoint(mmdd, val))
 		// fmt.Printf("[%d] sum=%f(%f) ma=%f\n", i, sum, dqs[i].Close, ma)
 		sum -= dqs[i-maNr+1].Close
 		// fmt.Printf("sum=%f(%f)\n", sum, dqs[i-maNr+1].Close)
@@ -190,5 +191,5 @@ func toCandleDataPoint(mmdd string, dq *mydb.DaliyQuote) DataPoint {
 	return GenCandleDataPoint(mmdd, dq.Open, dq.High, dq.Low, dq.Close)
 }
 func toVolumeDataPoint(mmdd string, dq *mydb.DaliyQuote) DataPoint {
-	return GenVolumeDataPoint(mmdd, dq.Volume)
+	return GenXYDataPoint(mmdd, float64(dq.Volume/1000))
 }

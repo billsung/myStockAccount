@@ -1,7 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"math"
+	"strconv"
+
+	"golang.org/x/exp/rand"
 )
 
 const MA5_SKYBLUE string = "rgba(97, 141, 212, 0.6)"
@@ -41,16 +45,31 @@ type ChartConfig struct {
 	Options map[string]interface{} `json:"options"`
 }
 
+type GenericDataset struct {
+	Type            string      `json:"type"`
+	Label           string      `json:"label"`
+	Data            []float64   `json:"data"`
+	BackgroundColor interface{} `json:"backgroundColor,omitempty"`
+	BorderColor     interface{} `json:"borderColor,omitempty"`
+	BorderWidth     int         `json:"borderWidth,omitempty"`
+	HoverOffset     int         `json:"hoverOffset,omitempty"`
+}
+
+type GenericChartConfig struct {
+	Type string `json:"type"`
+	Data struct {
+		Labels   []string         `json:"labels"`
+		Datasets []GenericDataset `json:"datasets"`
+	} `json:"data"`
+	Options map[string]interface{} `json:"options"`
+}
+
 func GenCandleDataPoint(x string, o float64, h float64, l float64, c float64) DataPoint {
 	return DataPoint{X: x, O: o, H: h, L: l, C: c}
 }
 
-func GenMADataPoint(x string, ma float64) DataPoint {
-	return DataPoint{X: x, Y: ma}
-}
-
-func GenVolumeDataPoint(x string, vol int64) DataPoint {
-	return DataPoint{X: x, Y: float64(vol)}
+func GenXYDataPoint(x string, y float64) DataPoint {
+	return DataPoint{X: x, Y: y}
 }
 
 func GenCandleDataset(ticket string, candle []DataPoint) Dataset {
@@ -86,7 +105,24 @@ func GenVolumeDataset(volume []DataPoint) Dataset {
 	}
 }
 
-func GenChartConfig(labels []string, datasets []Dataset) ChartConfig {
+func GenGenericDataset(graphType string, graphName string, val []float64, bgColor []string) GenericDataset {
+	return GenericDataset{
+		Type:            graphType,
+		Label:           graphName,
+		Data:            val,
+		BackgroundColor: bgColor,
+		HoverOffset:     2,
+	}
+}
+
+func GenBGColor() string {
+	r := rand.Int63n(256)
+	g := rand.Int63n(256)
+	b := rand.Int63n(256)
+	return fmt.Sprintf("rgba(%s, %s, %s, 0.6)", strconv.FormatInt(r, 10), strconv.FormatInt(g, 10), strconv.FormatInt(b, 10))
+}
+
+func GenCandleStickChartConfig(labels []string, datasets []Dataset) ChartConfig {
 	config := ChartConfig{Type: "candlestick"}
 
 	config.Data.Labels = labels
@@ -124,7 +160,7 @@ func GenChartConfig(labels []string, datasets []Dataset) ChartConfig {
 				"beginAtZero": false,
 				"position":    "left",
 				"title": map[string]interface{}{
-					"display": true,
+					"display": false,
 					"text":    "Price",
 				},
 			},
@@ -134,12 +170,30 @@ func GenChartConfig(labels []string, datasets []Dataset) ChartConfig {
 				"min":      0,
 				"position": "right",
 				"title": map[string]interface{}{
-					"display": true,
+					"display": false,
 					"text":    "Volume",
 				},
 				"grid": map[string]interface{}{
 					"drawOnChartArea": false,
 				},
+			},
+		},
+	}
+
+	return config
+}
+
+func GenGenericChartConfig(graphType string, labels []string, datasets []GenericDataset) GenericChartConfig {
+	config := GenericChartConfig{Type: graphType}
+
+	config.Data.Labels = labels
+	config.Data.Datasets = datasets
+
+	config.Options = map[string]interface{}{
+		"responsive": true,
+		"plugins": map[string]interface{}{
+			"legend": map[string]interface{}{
+				"display": false,
 			},
 		},
 	}

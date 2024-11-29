@@ -12,17 +12,17 @@ import (
 	mydb "myDatabase"
 )
 
-type Request struct {
+type StatisRequest struct {
 	Op       string `json:"op"`
 	Interval int    `json:"interval"`
 }
-type Reply struct {
+type OldReply struct {
 	Labels []string `json:"labels"`
 	Data   []int    `json:"data"`
 }
 
 func doStatistic(w http.ResponseWriter, r *http.Request) {
-	var req Request
+	var req StatisRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONErrResonse(w, err.Error(), http.StatusBadRequest)
 	}
@@ -40,6 +40,8 @@ func doStatistic(w http.ResponseWriter, r *http.Request) {
 			writeJSONErrResonse(w, err.Error(), http.StatusBadRequest)
 		}
 		writeJSONOKResonse(w, reply)
+	case "holding":
+		getHolding(w)
 	}
 }
 
@@ -133,7 +135,7 @@ func procTrans(v mydb.Transaction) error {
 	return nil
 }
 
-func calGain(interval int) (reply Reply, err error) {
+func calGain(interval int) (reply OldReply, err error) {
 	y, d, m := time.Now().AddDate(0, -interval, 0).Date()
 	realizeds, err := mydb.GetRelized(y, int(d), m)
 	if err != nil {
@@ -165,4 +167,56 @@ func calGain(interval int) (reply Reply, err error) {
 		reply.Data = append(reply.Data, val)
 	}
 	return reply, nil
+}
+
+func getHolding(w http.ResponseWriter) {
+	labels := []string{}
+	bgColor := []string{}
+	nets := []float64{}
+	prev := mydb.Holding{}
+
+	holdings, err := mydb.GetHoldingAll()
+	if err != nil {
+		return
+	}
+
+	for i, ent := range holdings {
+		if i == 0 {
+			prev = ent
+			continue
+		}
+		if ent.Code == prev.Code {
+			fmt.Printf("add %v + %v\n", prev, ent)
+			prev.Quantity += ent.Quantity
+			prev.Net += ent.Net
+		} else {
+			fmt.Printf("== %v\n", prev)
+			name, err := mydb.RefLookupNameByCode(prev.Code)
+			if err != nil {
+				writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
+				return
+			}
+			labels = append(labels, prev.Code+name)
+			nets = append(nets, float64(prev.Net))
+			bgColor = append(bgColor, GenBGColor())
+			prev = ent
+		}
+	}
+	fmt.Printf("== %v\n", prev)
+	name, err := mydb.RefLookupNameByCode(prev.Code)
+	if err != nil {
+		writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
+		return
+	}
+	labels = append(labels, prev.Code+name)
+	nets = append(nets, float64(prev.Net))
+	bgColor = append(bgColor, GenBGColor())
+
+	ds := GenGenericDataset("doughnut", "Holdings", nets, bgColor)
+	config := GenGenericChartConfig("doughnut", labels, []GenericDataset{ds})
+
+	res := Result{Config: config}
+	reply := Reply{Result: []Result{res}, NextTblIdx: 0}
+
+	writeJSONOKResonse(w, reply)
 }
