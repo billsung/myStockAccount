@@ -43,11 +43,10 @@ func writeJSONParseIncomplete(w http.ResponseWriter, msg string, errcode int, da
 func main() {
 	mydb.InitMyDB()
 
-	http.HandleFunc("/", homePage)
-	http.HandleFunc("/transactions", transactionsHandler)
-	http.HandleFunc("/parser", parseHandler)
+	http.HandleFunc("/", statisticHandler)
+	http.HandleFunc("/parseTrans", parseTransHandler)
 	http.HandleFunc("/addref", addRefHandler)
-	http.HandleFunc("/statistics", statisticHandler)
+	http.HandleFunc("/parser", parserHandler)
 	http.HandleFunc("/scanner", scannerHandler)
 
 	fmt.Println("Server started at http://localhost:8080")
@@ -56,14 +55,10 @@ func main() {
 	mydb.CloseMyDB()
 }
 
-func homePage(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "./web/index.html")
-}
-
-func transactionsHandler(w http.ResponseWriter, r *http.Request) {
+func parserHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		//noop
+		http.ServeFile(w, r, "./web/account.html")
 	case "POST":
 		createTransaction(w, r)
 	default:
@@ -71,7 +66,7 @@ func transactionsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func parseHandler(w http.ResponseWriter, r *http.Request) {
+func parseTransHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		parseTransaction(w, r)
@@ -100,7 +95,7 @@ func addRefHandler(w http.ResponseWriter, r *http.Request) {
 func statisticHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
-		http.ServeFile(w, r, "./web/statistics.html")
+		http.ServeFile(w, r, "./web/index.html")
 	case "POST":
 		doStatistic(w, r)
 	default:

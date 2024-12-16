@@ -61,9 +61,8 @@ func genLineDP(dq *mydb.DaliyQuote, dqEnd *mydb.DaliyQuote, y float64) []DataPoi
 }
 
 func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error) {
-	const GAP_MUL float64 = 1.02
-
 	day := BASE_QDS_NR
+	skipDay := day + interval/2
 	totalLen := interval + BASE_QDS_NR
 	if len(dqs) != totalLen {
 		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
@@ -82,26 +81,29 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 	hline1 := Dataset{}
 	hline2 := Dataset{}
 
-	mmdd := fmt.Sprintf("%02d%02d", dqs[day].Month, dqs[day].Day)
-	candle = append(candle, toCandleDataPoint(mmdd, &dqs[day]))
-	vols = append(vols, toVolumeDataPoint(mmdd, &dqs[day]))
-	labels = append(labels, toMMDD(&dqs[day]))
-	day += 1
+	for day < skipDay {
+		mmdd := fmt.Sprintf("%02d%02d", dqs[day].Month, dqs[day].Day)
+		candle = append(candle, toCandleDataPoint(mmdd, &dqs[day]))
+		vols = append(vols, toVolumeDataPoint(mmdd, &dqs[day]))
+		labels = append(labels, toMMDD(&dqs[day]))
+		day += 1
+	}
+
 	for day < totalLen {
 		dq1 := dqs[day-1] // former day
 		dq2 := dqs[day]   // current loop day
 
-		h1 := math.Max(dq1.Open, dq1.Close)
-		h2 := math.Max(dq2.Open, dq2.Close)
+		h1 := dq1.High
+		h2 := dq2.High
 
-		l1 := math.Min(dq1.Open, dq1.Close)
-		l2 := math.Min(dq2.Open, dq2.Close)
+		l1 := dq1.Low
+		l2 := dq2.Low
 
 		highGap := l2 - h1
 		lowGap := l1 - h2
 
-		if (findings != TYPE_GAP_CALL || highGap > foundGap) && highGap > 0 {
-			if h1*GAP_MUL < l2 {
+		if highGap > 0 {
+			if findings != TYPE_GAP_CALL || highGap > foundGap {
 				foundDay = day
 				findings = TYPE_GAP_CALL
 				foundGap = highGap
@@ -110,8 +112,8 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 				hline2 = GenLineDataset("downer", genLineDP(&dq1, &dqs[totalLen-1], h1), "#f5405e")
 			}
 		}
-		if (findings != TYPE_GAP_PUT || lowGap > foundGap) && lowGap > 0 {
-			if h2*GAP_MUL < l1 {
+		if lowGap > 0 {
+			if findings != TYPE_GAP_PUT || lowGap > foundGap {
 				foundDay = day
 				findings = TYPE_GAP_PUT
 				foundGap = lowGap
@@ -120,8 +122,9 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 			}
 		}
 
-		// if tblName == "stk6706" {
-		// 	fmt.Printf("fd=%d h=%f,%f l=%f,%f finding=%s\n", foundDay-BASE_QDS_NR, h1, h2, l1, l2, TypeToStr(findings))
+		// if tblName == "stk6669" {
+		// 	fmt.Printf("(%d)fd=%d h=%f,%f l=%f,%f hg=%f lg=%f finding=%s\n",
+		// 		day, foundDay, h1, h2, l1, l2, highGap, lowGap, TypeToStr(findings))
 		// }
 
 		mmdd := toMMDD(&dq2)
@@ -143,24 +146,26 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 		closeDay := findGapCallClose(interval, foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
 			return Result{}, ErrNotInsterested
-		}
-		lastDays := totalLen - closeDay
-		if lastDays < 3 {
-			findings = TYPE_GAP_CALL_CLOSED
-		} else {
-			return Result{}, ErrNotInsterested
+		} else if closeDay != -1 {
+			lastDays := totalLen - closeDay
+			if lastDays < 2 {
+				findings = TYPE_GAP_CALL_CLOSED
+			} else {
+				return Result{}, ErrNotInsterested
+			}
 		}
 	}
 	if findings == TYPE_GAP_PUT {
 		closeDay := findGapPutClose(interval, foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
 			return Result{}, ErrNotInsterested
-		}
-		lastDays := totalLen - closeDay
-		if lastDays < 3 {
-			findings = TYPE_GAP_PUT_CLOSED
-		} else {
-			return Result{}, ErrNotInsterested
+		} else if closeDay != -1 {
+			lastDays := totalLen - closeDay
+			if lastDays < 2 {
+				findings = TYPE_GAP_PUT_CLOSED
+			} else {
+				return Result{}, ErrNotInsterested
+			}
 		}
 	}
 

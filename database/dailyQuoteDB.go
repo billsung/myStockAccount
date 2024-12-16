@@ -2,6 +2,7 @@ package myDatabase
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"slices"
@@ -12,6 +13,8 @@ import (
 
 const STKPREFIX string = "stk"
 const CHECKED_DATE_TABLE string = "checkdate"
+
+var ErrNoSuchTable error = errors.New("new stock")
 
 type DaliyQuote struct {
 	Year   int     `json:"year"`
@@ -133,8 +136,8 @@ func GetDailyQuote(tblName string, days int) (dq []DaliyQuote, err error) {
 		" LIMIT " + strconv.Itoa(days)
 	rows, err := scanDB.Query(cmd)
 	if err != nil {
-		fmt.Println("Failed to query DQ", cmd)
-		return dq, nil
+		fmt.Printf("Failed to query DQ (%s) err=%s\n", cmd, err.Error())
+		return dq, ErrNoSuchTable
 	}
 	defer rows.Close()
 
@@ -143,7 +146,7 @@ func GetDailyQuote(tblName string, days int) (dq []DaliyQuote, err error) {
 		var Id int
 		err := rows.Scan(&Id, &r.Year, &r.Month, &r.Day, &r.Volume, &r.Trans, &r.Value, &r.Open, &r.High, &r.Low, &r.Close, &r.PE)
 		if err != nil {
-			return dq, nil
+			return dq, err
 		}
 		dq = append(dq, r)
 	}

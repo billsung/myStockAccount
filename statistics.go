@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	mydb "myDatabase"
@@ -174,6 +175,7 @@ func getHolding(w http.ResponseWriter) {
 	bgColor := []string{}
 	nets := []float64{}
 	prev := mydb.Holding{}
+	holdingValues := 0
 
 	holdings, err := mydb.GetHoldingAll()
 	if err != nil {
@@ -186,28 +188,30 @@ func getHolding(w http.ResponseWriter) {
 			continue
 		}
 		if ent.Code == prev.Code {
-			fmt.Printf("add %v + %v\n", prev, ent)
+			// fmt.Printf("add %v + %v\n", prev, ent)
 			prev.Quantity += ent.Quantity
 			prev.Net += ent.Net
 		} else {
-			fmt.Printf("== %v\n", prev)
+			// fmt.Printf("== %v\n", prev)
 			name, err := mydb.RefLookupNameByCode(prev.Code)
 			if err != nil {
 				writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
 				return
 			}
+			holdingValues += prev.Net
 			labels = append(labels, prev.Code+name)
 			nets = append(nets, float64(prev.Net))
 			bgColor = append(bgColor, GenBGColor())
 			prev = ent
 		}
 	}
-	fmt.Printf("== %v\n", prev)
+	// fmt.Printf("== %v\n", prev)
 	name, err := mydb.RefLookupNameByCode(prev.Code)
 	if err != nil {
 		writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
 		return
 	}
+	holdingValues += prev.Net
 	labels = append(labels, prev.Code+name)
 	nets = append(nets, float64(prev.Net))
 	bgColor = append(bgColor, GenBGColor())
@@ -216,7 +220,7 @@ func getHolding(w http.ResponseWriter) {
 	config := GenGenericChartConfig("doughnut", labels, []GenericDataset{ds})
 
 	res := Result{Config: config}
-	reply := Reply{Result: []Result{res}, NextTblIdx: 0}
+	reply := Reply{Result: []Result{res}, NextTblIdx: 0, ReplyInfo: strconv.FormatInt(int64(holdingValues), 10)}
 
 	writeJSONOKResonse(w, reply)
 }

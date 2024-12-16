@@ -13,8 +13,8 @@ import (
 var ErrTooFewDays error = errors.New("too few days")
 var ErrNotInsterested error = errors.New("not interested")
 
-const BASE_QDS_NR int = 19
-const MIN_INTRESTED_VOL int64 = 300000 // qty 300,000
+const BASE_QDS_NR int = 20
+const MIN_INTRESTED_VOL int64 = 800000 // qty 800,000
 
 const MAX_TRANSMIT_SIZE int = 32
 
@@ -51,6 +51,7 @@ type ScanRequest struct {
 type Reply struct {
 	Result     []Result `json:"result"`
 	NextTblIdx int      `json:"next"`
+	ReplyInfo  string   `json:"replyinfo,omitempty"`
 }
 
 func isWeekend(t time.Time) bool {
@@ -135,7 +136,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 			return
 		}
 
-		fmt.Printf("Found candidate %s+\n", tblName)
+		// fmt.Printf("Found candidate %s+\n", tblName)
 		reply.Result = append(reply.Result, result)
 		foundNr += 1
 
