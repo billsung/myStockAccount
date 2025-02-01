@@ -60,6 +60,7 @@ func InitMyDB() {
 func CloseMyDB() {
 	db.Close()
 	scanDB.Close()
+	fmt.Println("DataBase closed")
 }
 
 func VacuumDB() error {

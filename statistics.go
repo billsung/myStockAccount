@@ -176,6 +176,31 @@ func calGain(interval int) (reply OldReply, err error) {
 	return reply, nil
 }
 
+func appendToReplyList(prev mydb.Holding, labels *[]string, nets *[]float64, marketNets *[]int64,
+	bgColor *[]string, holdingValues *int, marketValues *float64) string {
+
+	name, err := mydb.RefLookupNameByCode(prev.Code)
+	if err != nil {
+		return "Code-Name pair not found"
+	}
+
+	var mknet float64 = 0.0
+	dq, err := mydb.GetDailyQuote(mydb.STKPREFIX+prev.Code, 1)
+	if err == nil {
+		mknet = dq[0].Close * float64(prev.Quantity)
+		*marketValues += mknet
+	}
+
+	*holdingValues += prev.Net
+
+	*labels = append(*labels, prev.Code+name)
+	*nets = append(*nets, float64(prev.Net))
+	*marketNets = append(*marketNets, int64(mknet))
+	*bgColor = append(*bgColor, GenBGColor())
+
+	return ""
+}
+
 func getHolding(w http.ResponseWriter) {
 	labels := []string{}
 	bgColor := []string{}
@@ -201,47 +226,20 @@ func getHolding(w http.ResponseWriter) {
 			prev.Net += ent.Net
 		} else {
 			// fmt.Printf("== %v\n", prev)
-			name, err := mydb.RefLookupNameByCode(prev.Code)
-			if err != nil {
+			errstr := appendToReplyList(prev, &labels, &nets, &marketNets, &bgColor, &holdingValues, &marketValues)
+			if errstr != "" {
 				writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
 				return
 			}
-
-			var mknet float64 = 0.0
-			dq, err := mydb.GetDailyQuote(mydb.STKPREFIX+prev.Code, 1)
-			if err == nil {
-				mknet = dq[0].Close * float64(prev.Quantity)
-				marketValues += mknet
-			}
-
-			holdingValues += prev.Net
-
-			labels = append(labels, prev.Code+name)
-			nets = append(nets, float64(prev.Net))
-			marketNets = append(marketNets, int64(mknet))
-			bgColor = append(bgColor, GenBGColor())
 			prev = ent
 		}
 	}
 	// fmt.Printf("== %v\n", prev)
-
-	var mknet float64 = 0.0
-	dq, err := mydb.GetDailyQuote(mydb.STKPREFIX+prev.Code, 1)
-	if err == nil {
-		mknet = dq[0].Close*float64(prev.Quantity) - float64(prev.Net)
-		marketValues += mknet
-	}
-
-	name, err := mydb.RefLookupNameByCode(prev.Code)
-	if err != nil {
+	errstr := appendToReplyList(prev, &labels, &nets, &marketNets, &bgColor, &holdingValues, &marketValues)
+	if errstr != "" {
 		writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
 		return
 	}
-	holdingValues += prev.Net
-	labels = append(labels, prev.Code+name)
-	nets = append(nets, float64(prev.Net))
-	marketNets = append(marketNets, int64(mknet))
-	bgColor = append(bgColor, GenBGColor())
 
 	ds := GenGenericDataset("doughnut", "Holdings", nets, bgColor)
 	config := GenGenericChartConfig("doughnut", labels, []GenericDataset{ds})

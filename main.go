@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"net/http"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	mydb "myDatabase"
 
@@ -43,17 +47,36 @@ func writeJSONParseIncomplete(w http.ResponseWriter, msg string, errcode int, da
 
 func main() {
 	mydb.InitMyDB()
+	defer mydb.CloseMyDB()
 
+	server := &http.Server{Addr: ":8080"}
 	http.HandleFunc("/", statisticHandler)
 	http.HandleFunc("/parseTrans", parseTransHandler)
 	http.HandleFunc("/addref", addRefHandler)
 	http.HandleFunc("/parser", parserHandler)
 	http.HandleFunc("/scanner", scannerHandler)
 
-	fmt.Println("Server started at http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	go func() {
+		fmt.Println("Server started at http://localhost:8080")
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("ListenAndServe error: %v\n", err)
+		}
+	}()
 
-	mydb.CloseMyDB()
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+
+	<-quit
+	fmt.Println("\nShutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		fmt.Printf("Server forced to shutdown: %v\n", err)
+	} else {
+		fmt.Println("Server exited properly")
+	}
 }
 
 func parserHandler(w http.ResponseWriter, r *http.Request) {
