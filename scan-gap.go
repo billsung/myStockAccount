@@ -2,22 +2,21 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	mydb "myDatabase"
 )
 
-func findGapCallClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []DataPoint, ma10 []DataPoint, ma20 []DataPoint) int {
-	base := math.Min(dqs[foundDay].Open, dqs[foundDay].Close)
-	for i := foundDay + 1; i < interval+BASE_QDS_NR; i = i + 1 {
+func findGapCallClose(foundDay int, dqs []mydb.DaliyQuote, ma5 []DataPoint, ma10 []DataPoint, ma20 []DataPoint) int {
+	base := dqs[foundDay-1].High
+	for i := foundDay + 1; i < len(dqs); i = i + 1 {
 		maDay := i - BASE_QDS_NR
 		avg5 := ma5[maDay].Y
 		avg10 := ma10[maDay].Y
 		avg20 := ma20[maDay].Y
 
-		if avg10 > base {
-			continue
+		if dqs[i].Close < base {
+			return i
 		}
 
 		fail5 := dqs[i].Close <= avg5
@@ -31,16 +30,17 @@ func findGapCallClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []D
 	return -1
 }
 
-func findGapPutClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []DataPoint, ma10 []DataPoint, ma20 []DataPoint) int {
-	base := math.Max(dqs[foundDay].Open, dqs[foundDay].Close)
-	for i := foundDay + 1; i < interval+BASE_QDS_NR; i = i + 1 {
+func findGapPutClose(foundDay int, dqs []mydb.DaliyQuote, ma5 []DataPoint, ma10 []DataPoint, ma20 []DataPoint) int {
+	base := dqs[foundDay-1].Low
+	for i := foundDay + 1; i < len(dqs); i = i + 1 {
 		maDay := i - BASE_QDS_NR
 		avg5 := ma5[maDay].Y
 		avg10 := ma10[maDay].Y
 		avg20 := ma20[maDay].Y
 
-		if avg10 < base {
-			continue
+		if dqs[i].Close > base {
+			// fmt.Printf("close=%f base=%f\n", dqs[i].Close, base)
+			return i
 		}
 
 		fail5 := dqs[i].Close >= avg5
@@ -48,6 +48,7 @@ func findGapPutClose(interval int, foundDay int, dqs []mydb.DaliyQuote, ma5 []Da
 		fail20 := dqs[i].Close >= avg20
 
 		if fail5 && fail10 && fail20 {
+			// fmt.Printf("close=%f ma=%f,%f,%f\n", dqs[i].Close, avg5, avg10, avg20)
 			return i
 		}
 	}
@@ -60,16 +61,27 @@ func genLineDP(dq *mydb.DaliyQuote, dqEnd *mydb.DaliyQuote, y float64) []DataPoi
 	return []DataPoint{a, b}
 }
 
-func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error) {
+func findGap(option string, tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error) {
+	const FIND_TYP_ALL = 0
+	const FIND_TYP_CALL = 1
+	const FIND_TYP_PUT = 2
+	findType := 0
 	day := BASE_QDS_NR
-	skipDay := day + interval/2
-	totalLen := interval + BASE_QDS_NR
-	if len(dqs) != totalLen {
-		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
+	totalLen := len(dqs)
+	if len(dqs) < BASE_QDS_NR+interval {
+		fmt.Printf("ERR: %s day count is %d. It should over %d\n", tblName, len(dqs), BASE_QDS_NR+interval)
 		return Result{}, ErrTooFewDays
 	}
+	skipDay := totalLen - interval/2
 	if dqs[totalLen-1].Volume < MIN_INTRESTED_VOL {
 		return Result{}, ErrNotInsterested
+	}
+	if option == "Call" {
+		findType = FIND_TYP_CALL
+	} else if option == "Put" {
+		findType = FIND_TYP_PUT
+	} else {
+		findType = FIND_TYP_ALL
 	}
 
 	findings := 0
@@ -122,7 +134,7 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 			}
 		}
 
-		// if tblName == "stk6669" {
+		// if tblName == "stk1618" {
 		// 	fmt.Printf("(%d)fd=%d h=%f,%f l=%f,%f hg=%f lg=%f finding=%s\n",
 		// 		day, foundDay, h1, h2, l1, l2, highGap, lowGap, TypeToStr(findings))
 		// }
@@ -143,7 +155,7 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 	ma20 := genMA(dqs, 20)
 
 	if findings == TYPE_GAP_CALL {
-		closeDay := findGapCallClose(interval, foundDay, dqs, ma5, ma10, ma20)
+		closeDay := findGapCallClose(foundDay, dqs, ma5, ma10, ma20)
 		if closeDay == -1 && foundDay < (totalLen-4) {
 			return Result{}, ErrNotInsterested
 		} else if closeDay != -1 {
@@ -156,7 +168,11 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 		}
 	}
 	if findings == TYPE_GAP_PUT {
-		closeDay := findGapPutClose(interval, foundDay, dqs, ma5, ma10, ma20)
+		closeDay := findGapPutClose(foundDay, dqs, ma5, ma10, ma20)
+		// if tblName == "stk1618" {
+		// 	fmt.Printf("closeDay=%d\n", closeDay)
+		// }
+
 		if closeDay == -1 && foundDay < (totalLen-4) {
 			return Result{}, ErrNotInsterested
 		} else if closeDay != -1 {
@@ -166,6 +182,18 @@ func findGap(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error
 			} else {
 				return Result{}, ErrNotInsterested
 			}
+		}
+	}
+
+	if findType == FIND_TYP_CALL {
+		if findings == TYPE_GAP_PUT || findings == TYPE_GAP_CALL_CLOSED {
+			return Result{}, ErrNotInsterested
+		}
+
+	}
+	if findType == FIND_TYP_PUT {
+		if findings == TYPE_GAP_CALL || findings == TYPE_GAP_PUT_CLOSED {
+			return Result{}, ErrNotInsterested
 		}
 	}
 

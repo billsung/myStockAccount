@@ -13,6 +13,7 @@ import (
 var ErrTooFewDays error = errors.New("too few days")
 var ErrNotInsterested error = errors.New("not interested")
 
+const SHOWING_QDS int = 60
 const BASE_QDS_NR int = 20
 const MIN_INTRESTED_VOL int64 = 800000 // qty 800,000
 
@@ -44,6 +45,7 @@ type Result struct {
 
 type ScanRequest struct {
 	Op       string `json:"op"`
+	Option   string `json:"option,omitempty"`
 	Interval int    `json:"interval"`
 	Next     int    `json:"next"`
 }
@@ -51,7 +53,6 @@ type ScanRequest struct {
 type Reply struct {
 	Result     []Result `json:"result"`
 	NextTblIdx int      `json:"next"`
-	ReplyInfo  string   `json:"replyinfo,omitempty"`
 }
 
 func isWeekend(t time.Time) bool {
@@ -75,7 +76,8 @@ func doScan(w http.ResponseWriter, r *http.Request) {
 	interval := req.Interval
 	op := req.Op
 	next := req.Next
-	fmt.Printf("Start scan.. op=%s interval=%d next=%d\n", op, interval, next)
+	option := req.Option
+	fmt.Printf("Start scan.. op=%s opt=%s interval=%d next=%d\n", op, option, interval, next)
 
 	err := updateFetch()
 	if err != nil {
@@ -84,10 +86,10 @@ func doScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	continueScan(w, next, op, interval)
+	continueScan(w, next, op, option, interval)
 }
 
-func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
+func continueScan(w http.ResponseWriter, tblIdx int, op string, option string, interval int) {
 	reply := Reply{}
 
 	if tblIdx < 0 {
@@ -109,7 +111,11 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 		tblName := tables[i]
 		fmt.Printf("Getting DQ for %s...\r", tblName)
 
-		dqs, err := mydb.GetDailyQuote(tblName, interval+BASE_QDS_NR)
+		dayNr := interval + BASE_QDS_NR
+		if dayNr < SHOWING_QDS {
+			dayNr = SHOWING_QDS
+		}
+		dqs, err := mydb.GetDailyQuote(tblName, dayNr)
 		if err != nil {
 			writeJSONErrResonse(w, err.Error(), http.StatusInternalServerError)
 			fmt.Println("Failed to get DQ:", err.Error())
@@ -118,7 +124,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 
 		switch op {
 		case "gap":
-			result, err = findGap(tblName, interval, dqs)
+			result, err = findGap(option, tblName, interval, dqs)
 		case "vol-burst":
 			result, err = findVolBurst(tblName, interval, dqs)
 		default:
@@ -162,7 +168,7 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, interval int) {
 func genMA(dqs []mydb.DaliyQuote, maNr int) []DataPoint {
 	ma := []DataPoint{}
 	sum := 0.0
-	i := BASE_QDS_NR + 1 - maNr
+	i := BASE_QDS_NR - maNr + 1
 
 	// fmt.Println("CheckingMA", maNr)
 

@@ -52,7 +52,8 @@
         </div>
         <div class="right">
             <button type="button" onclick="parserPage()">Parser</button>
-            <button type="button" onclick="initGains()" disabled>ReInitialize</button>
+            <button type="button" onclick="scannerPage()">Scanner</button>
+            <button type="button" onclick="initGains()">ReInitialize</button>
         </div>
     </div>
     <div class="row">
@@ -79,7 +80,10 @@
             <canvas id="myChart" width="400" height="200"></canvas>
         </div>
         <div class="sideInfo">
-            <label for="holdingValue">Holding Values: </label><span id="holdingValue"></span>
+            <label>Holding Values: </label><span id="holdingValue"></span>
+            <label>Market Values: </label><span id="marketValue"></span>
+            <label>Profit: </label><span id="profit"></span>
+            <label>Ratio: </label><span id="profitPersent"></span>%
             <canvas id="myHoldings" width="400" height="400"></canvas>
         </div>
     </div>
@@ -183,16 +187,39 @@
                 if (response.ok) {
                     const reply = await response.json();
                     const holdingChart = document.getElementById('myHoldings')
-                    logInfo(reply)
+                    // logInfo(reply)
 
-                    myHoldingChart = new Chart(holdingChart, reply.result[0].config)
-                    document.getElementById('holdingValue').innerText = numStringWithCommas(reply.replyinfo)
+                    const conf = reply.result[0].config
+                    const opts = conf["options"]
+                    const plugins = opts["plugins"]
+                    plugins['tooltip'] = {
+                        userData: { mktnet: reply.marketnets },
+                        callbacks: {
+                            afterLabel: function doughnutTextHover(ctx) {
+                                const userData = ctx.chart.config.options.plugins.tooltip.userData;
+                                const idx = ctx.dataIndex
+                                const val = ctx.dataset.data[idx]
+                                const mktval = userData.mktnet[idx]
+                                const proceeds = mktval-val
+                                return numberWithCommas(proceeds) + " (" + (proceeds*100/val).toFixed(2) + "%)"
+                            }
+                        }
+                    }
+
+                    myHoldingChart = new Chart(holdingChart, conf);
+                    let profit = reply.marketvals - reply.values;
+                    document.getElementById('holdingValue').innerText = numberWithCommas(reply.values)
+                    document.getElementById('marketValue').innerText = numberWithCommas(reply.marketvals)
+                    document.getElementById('profit').innerText = numberWithCommas(profit)
+                    document.getElementById('profitPersent').innerText = (profit*100/reply.values).toFixed(2)
                 } else {
                     const errorData = await response.json();
                 }
             } catch (error) {
                 console.error("Error:", error);
             }
+
+            getGains();
         }
 
         async function getGains() {
@@ -217,7 +244,7 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    logInfo(result)
+                    // logInfo(result)
                     updateChart(result.labels, result.data)
 
                     const proceeds = result.data.reduce((partialSum, a) => partialSum + a, 0);
@@ -259,7 +286,7 @@
             location.href = "http://localhost:8080/parser"
         }
         function scannerPage() {
-            location.href = "http://localhost:8080/sacnner"
+            location.href = "http://localhost:8080/scanner"
         }
 
         // Example of dynamically updating chart data after 3 seconds

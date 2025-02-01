@@ -62,16 +62,7 @@ func parseEntry(entry string) (errcode int, msg string) {
 	}
 
 	// Create Transaction instance
-	transaction := mydb.Transaction{
-		Year:      y,
-		Month:     int(m),
-		Day:       d,
-		Direction: direction,
-		Code:      code,
-		Price:     price,
-		Quantity:  quantity,
-		Fee:       fee,
-	}
+	transaction := mydb.CreateTransaction(y, int(m), d, direction, code, price, quantity, fee)
 
 	err = mydb.AddTransaction(transaction)
 	if err != nil {

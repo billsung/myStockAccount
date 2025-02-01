@@ -34,11 +34,11 @@ func toHumanized(avg int64) string {
 }
 
 func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, error) {
-	const BURST_MUL int64 = 4
+	const BURST_MUL int64 = 3
 
-	totalLen := interval + BASE_QDS_NR
-	if len(dqs) != totalLen {
-		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), totalLen)
+	totalLen := len(dqs)
+	if totalLen < interval+BASE_QDS_NR {
+		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), interval+BASE_QDS_NR)
 		return Result{}, ErrTooFewDays
 	}
 	if dqs[totalLen-1].Volume < MIN_INTRESTED_VOL {
@@ -57,14 +57,17 @@ func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, 
 	volumes := []DataPoint{}
 	labels := []string{}
 	var avg int64 = 0
+	var nr int64 = 0
 	for i := BASE_QDS_NR; i < totalLen-1; i += 1 {
-		avg += (dqs[i].Volume * int64(i-BASE_QDS_NR-1))
+		weight := int64(i - BASE_QDS_NR - 1)
+		avg += (dqs[i].Volume * weight)
+		nr += weight
 		mmdd := toMMDD(&dqs[i])
 		candles = append(candles, toCandleDataPoint(mmdd, &dqs[i]))
 		volumes = append(volumes, toVolumeDataPoint(mmdd, &dqs[i]))
 		labels = append(labels, mmdd)
 	}
-	avg /= int64((1 + interval - 1) * (interval - 1) / 2)
+	avg /= nr
 	mmdd := toMMDD(&dqs[totalLen-1])
 	candles = append(candles, toCandleDataPoint(mmdd, &dqs[totalLen-1]))
 	volumes = append(volumes, toVolumeDataPoint(mmdd, &dqs[totalLen-1]))

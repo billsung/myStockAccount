@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"sort"
-	"strconv"
 	"time"
 
 	mydb "myDatabase"
@@ -16,6 +15,13 @@ import (
 type StatisRequest struct {
 	Op       string `json:"op"`
 	Interval int    `json:"interval"`
+}
+type StatisReply struct {
+	Result       []Result `json:"result"`
+	NextTblIdx   int      `json:"next"`
+	MarketNets   []int64  `json:"marketnets,omitempty"`
+	Values       int64    `json:"values,omitempty"`
+	MarketValues int64    `json:"marketvals,omitempty"`
 }
 type OldReply struct {
 	Labels []string `json:"labels"`
@@ -174,8 +180,10 @@ func getHolding(w http.ResponseWriter) {
 	labels := []string{}
 	bgColor := []string{}
 	nets := []float64{}
+	marketNets := []int64{}
 	prev := mydb.Holding{}
 	holdingValues := 0
+	marketValues := 0.0
 
 	holdings, err := mydb.GetHoldingAll()
 	if err != nil {
@@ -198,14 +206,32 @@ func getHolding(w http.ResponseWriter) {
 				writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
 				return
 			}
+
+			var mknet float64 = 0.0
+			dq, err := mydb.GetDailyQuote(mydb.STKPREFIX+prev.Code, 1)
+			if err == nil {
+				mknet = dq[0].Close * float64(prev.Quantity)
+				marketValues += mknet
+			}
+
 			holdingValues += prev.Net
+
 			labels = append(labels, prev.Code+name)
 			nets = append(nets, float64(prev.Net))
+			marketNets = append(marketNets, int64(mknet))
 			bgColor = append(bgColor, GenBGColor())
 			prev = ent
 		}
 	}
 	// fmt.Printf("== %v\n", prev)
+
+	var mknet float64 = 0.0
+	dq, err := mydb.GetDailyQuote(mydb.STKPREFIX+prev.Code, 1)
+	if err == nil {
+		mknet = dq[0].Close*float64(prev.Quantity) - float64(prev.Net)
+		marketValues += mknet
+	}
+
 	name, err := mydb.RefLookupNameByCode(prev.Code)
 	if err != nil {
 		writeJSONErrResonse(w, "Code-Name pair not found", http.StatusInternalServerError)
@@ -214,13 +240,14 @@ func getHolding(w http.ResponseWriter) {
 	holdingValues += prev.Net
 	labels = append(labels, prev.Code+name)
 	nets = append(nets, float64(prev.Net))
+	marketNets = append(marketNets, int64(mknet))
 	bgColor = append(bgColor, GenBGColor())
 
 	ds := GenGenericDataset("doughnut", "Holdings", nets, bgColor)
 	config := GenGenericChartConfig("doughnut", labels, []GenericDataset{ds})
 
 	res := Result{Config: config}
-	reply := Reply{Result: []Result{res}, NextTblIdx: 0, ReplyInfo: strconv.FormatInt(int64(holdingValues), 10)}
+	reply := StatisReply{Result: []Result{res}, NextTblIdx: 0, MarketNets: marketNets, Values: int64(holdingValues), MarketValues: int64(marketValues)}
 
 	writeJSONOKResonse(w, reply)
 }

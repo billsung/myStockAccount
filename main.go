@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strings"
 
@@ -119,6 +120,15 @@ func createTransaction(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	t.Total = int(math.Round(t.Price * float64(t.Quantity)))
+	if t.Direction {
+		t.Tax = 0
+		t.Net = t.Total + t.Fee
+	} else {
+		t.Tax = int(math.Round(float64(t.Total) * 0.003))
+		t.Net = t.Total - t.Fee - t.Tax
 	}
 
 	err := mydb.AddTransaction(t)

@@ -48,7 +48,7 @@
 			<label for="interval">Interval:</label>
 			<input type="number" id="interval" name="interval" min="1" max="120" value="20" required disabled>
 			<span>months&nbsp</span>
-			<button type="button" onclick="getGaps()">K-Gaps</button>
+			<button type="button" onclick="getGaps(false)">K-Gap Calls</button>
 			<button type="button" onclick="getFlags()" disabled>K-Flags</button>
 			<button type="button" onclick="getVolBurst()">Vol-Burst</button>
 		</div>
@@ -129,19 +129,25 @@
 
 		var up = 0;
 		var down = 0;
-		async function getGaps() {
+		async function getGaps(isPut) {
 			const interval = parseInt(document.getElementById('interval').value, 10);
 			if (interval < 10) {
 				logError("Interval cannot less then 10")
 			}
 
-			const _op = "gap"
+			const _op = "gap";
+			var option;
+			if (isPut == false) {
+				_option = "Call"
+			} else {
+				_option = "Put"
+			}
 			const query = {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify({ op: _op, interval: interval, next: 0 })
+				body: JSON.stringify({ op: _op, option: _option, interval: interval, next: 0 })
 			}
 
 			await fetchScan(query, _op)
@@ -243,7 +249,7 @@
 					const canvas = document.createElement('canvas');
 					canvas.id = `ca-main-${code}`
 					canvas.width = 800;
-					canvas.height = 300;
+					canvas.height = 200;
 					clone.appendChild(canvas);
 
 					// logInfo(config)

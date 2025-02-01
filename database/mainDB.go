@@ -133,16 +133,6 @@ func initRealizedTbl() {
 }
 
 func AddTransaction(t Transaction) (err error) {
-	t.Total = int(math.Round(t.Price * float64(t.Quantity)))
-
-	if t.Direction {
-		t.Tax = 0
-		t.Net = t.Total + t.Fee
-	} else {
-		t.Tax = int(math.Round(float64(t.Total) * 0.003))
-		t.Net = t.Total - t.Fee - t.Tax
-	}
-
 	cmd := "INSERT INTO " + TABLENAME +
 		" (code, year, month, day, direction, price, quantity, fee, tax, total, net)" +
 		" VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
@@ -290,4 +280,29 @@ func GetRelized(y int, m int, d int) ([]Holding, error) {
 	}
 	defer rows.Close()
 	return genHolding(rows)
+}
+
+func CreateTransaction(y int, m int, d int, dir bool, code string, price float64, qty int, fee int) (t Transaction) {
+	t = Transaction{
+		Year:      y,
+		Month:     m,
+		Day:       d,
+		Direction: dir,
+		Code:      code,
+		Price:     price,
+		Quantity:  qty,
+		Fee:       fee,
+	}
+
+	t.Total = int(math.Round(t.Price * float64(t.Quantity)))
+
+	if t.Direction {
+		t.Tax = 0
+		t.Net = t.Total + t.Fee
+	} else {
+		t.Tax = int(math.Round(float64(t.Total) * 0.003))
+		t.Net = t.Total - t.Fee - t.Tax
+	}
+
+	return t
 }

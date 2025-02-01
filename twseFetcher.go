@@ -225,9 +225,9 @@ func formatToDailyQuote(entry []string, y int, m int, d int) (string, mydb.Daliy
 	}
 
 	code := entry[0]
-	if strings.HasPrefix(entry[0], "0") {
-		return code, dq, ErrIsETF
-	}
+	// if strings.HasPrefix(entry[0], "0") {
+	// 	return code, dq, ErrIsETF
+	// }
 
 	// fmt.Printf("Formating %s...\n", code)
 
