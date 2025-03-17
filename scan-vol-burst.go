@@ -38,7 +38,7 @@ func findVolBurst(tblName string, interval int, dqs []mydb.DaliyQuote) (Result, 
 
 	totalLen := len(dqs)
 	if totalLen < interval+BASE_QDS_NR {
-		fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), interval+BASE_QDS_NR)
+		// fmt.Printf("ERR: %s day count is %d it should be %d\n", tblName, len(dqs), interval+BASE_QDS_NR)
 		return Result{}, ErrTooFewDays
 	}
 	if dqs[totalLen-1].Volume < MIN_INTRESTED_VOL {

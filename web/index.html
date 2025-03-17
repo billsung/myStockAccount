@@ -201,6 +201,9 @@
                                 const val = ctx.dataset.data[idx]
                                 const mktval = userData.mktnet[idx]
                                 const proceeds = mktval-val
+                                if (mktval == 0) {
+                                    return "N/A"
+                                }
                                 return numberWithCommas(proceeds) + " (" + (proceeds*100/val).toFixed(2) + "%)"
                             }
                         }

@@ -27,7 +27,6 @@ type DaliyQuote struct {
 	High   float64 `json:"high"`
 	Low    float64 `json:"low"`
 	Close  float64 `json:"close"`
-	PE     float64 `json:"pe"`
 }
 
 func initStockTbl() {
@@ -53,8 +52,7 @@ func checkStockTbl(code string) error {
 		open REAL NOT NULL,
 		high REAL NOT NULL,
 		low REAL NOT NULL,
-		close REAL NOT NULL,
-		pe REAL NOT NULL
+		close REAL NOT NULL
 	    )`, STKPREFIX, code)
 
 	if _, err := scanDB.Exec(cmd); err != nil {
@@ -144,7 +142,7 @@ func GetDailyQuote(tblName string, days int) (dq []DaliyQuote, err error) {
 	for rows.Next() {
 		var r DaliyQuote
 		var Id int
-		err := rows.Scan(&Id, &r.Year, &r.Month, &r.Day, &r.Volume, &r.Trans, &r.Value, &r.Open, &r.High, &r.Low, &r.Close, &r.PE)
+		err := rows.Scan(&Id, &r.Year, &r.Month, &r.Day, &r.Volume, &r.Trans, &r.Value, &r.Open, &r.High, &r.Low, &r.Close)
 		if err != nil {
 			return dq, err
 		}
@@ -163,7 +161,7 @@ func FindPrevDailyQuote(code string, y int, m int, d int) (dq DaliyQuote, err er
 		" LIMIT 1", STKPREFIX, code, y, y, m, y, m, d)
 	row := scanDB.QueryRow(cmd)
 	var Id int
-	err = row.Scan(&Id, &dq.Year, &dq.Month, &dq.Day, &dq.Volume, &dq.Trans, &dq.Value, &dq.Open, &dq.High, &dq.Low, &dq.Close, &dq.PE)
+	err = row.Scan(&Id, &dq.Year, &dq.Month, &dq.Day, &dq.Volume, &dq.Trans, &dq.Value, &dq.Open, &dq.High, &dq.Low, &dq.Close)
 	if err != nil {
 		fmt.Println("Failed to query prev DQ", cmd)
 		return dq, nil
@@ -187,9 +185,9 @@ func AddDailyQuote(code string, dq *DaliyQuote) error {
 
 	tblName := STKPREFIX + code
 	cmd := "INSERT INTO " + tblName +
-		" (year, month, day, volume, trans, value, open, high, low, close, pe)" +
-		" VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+		" (year, month, day, volume, trans, value, open, high, low, close)" +
+		" VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
 
-	_, err = scanDB.Exec(cmd, dq.Year, dq.Month, dq.Day, dq.Volume, dq.Trans, dq.Value, dq.Open, dq.High, dq.Low, dq.Close, dq.PE)
+	_, err = scanDB.Exec(cmd, dq.Year, dq.Month, dq.Day, dq.Volume, dq.Trans, dq.Value, dq.Open, dq.High, dq.Low, dq.Close)
 	return err
 }

@@ -155,11 +155,12 @@ func continueScan(w http.ResponseWriter, tblIdx int, op string, option string, i
 
 		if foundNr > MAX_TRANSMIT_SIZE {
 			reply.NextTblIdx = i + 1
+			fmt.Printf("Finished at i=%d\n", reply.NextTblIdx)
 			writeJSONOKResonse(w, reply)
 			return
 		}
 	}
-
+	fmt.Printf("Finished\n")
 	reply.NextTblIdx = -1
 	writeJSONOKResonse(w, reply)
 }
